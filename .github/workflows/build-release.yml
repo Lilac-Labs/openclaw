@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,21 +25,18 @@ jobs:
 
       - run: pnpm build
 
-      # Pack into a tarball (identical to what npm publish uploads)
-      # then extract it — this gives us a flat package with only
-      # the files declared in package.json "files" field
-      - run: |
-          pnpm pack
-          mkdir _release
-          tar xzf openclaw-*.tgz -C _release --strip-components=1
-          ls -la _release/
+      # Pack into a tarball (identical to what npm registry serves)
+      - run: pnpm pack
 
-      # Push the flat package to the release branch
+      # Upload tarball as a GitHub release asset
+      # Creates/updates a "latest" release so the URL is stable:
+      # npm install -g https://github.com/Lilac-Labs/openclaw/releases/latest/download/openclaw.tgz
       - run: |
-          cd _release
-          git init
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "build: release $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
-          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:release
+          mv openclaw-*.tgz openclaw.tgz
+          gh release delete latest --yes 2>/dev/null || true
+          gh release create latest openclaw.tgz \
+            --title "Latest Build" \
+            --notes "Auto-built from main ($(date -u +%Y-%m-%dT%H:%M:%SZ))" \
+            --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
