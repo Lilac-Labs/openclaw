@@ -22,9 +22,21 @@ jobs:
 
       - run: pnpm build
 
+      # Pack into a tarball (identical to what npm publish uploads)
+      # then extract it — this gives us a flat package with only
+      # the files declared in package.json "files" field
       - run: |
+          pnpm pack
+          mkdir _release
+          tar xzf openclaw-*.tgz -C _release --strip-components=1
+          ls -la _release/
+
+      # Push the flat package to the release branch
+      - run: |
+          cd _release
+          git init
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dist/
-          git commit -m "build: update dist [skip ci]"
-          git push origin HEAD:release --force
+          git add -A
+          git commit -m "build: release $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
+          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:release
