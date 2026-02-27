@@ -111,13 +111,26 @@ describe("browser server-context ensureTabAvailable", () => {
     expect(chosen.targetId).toBe("A");
   });
 
-  it("returns a descriptive message when no extension tabs are attached", async () => {
-    const responses = [[]];
-    stubChromeJsonList(responses);
+  // [lilac-start] extension driver now requests tab attach + polls instead of throwing immediately
+  // was: "returns a descriptive message when no extension tabs are attached"
+  //   expected: /no attached Chrome tabs/i
+  it("throws tab-not-found after request-tab-attach poll exhausts with no tabs", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes("/extension/request-tab-attach")) {
+        return { ok: true, json: async () => ({ sent: true }) } as unknown as Response;
+      }
+      if (u.includes("/json/list")) {
+        return { ok: true, json: async () => [] } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+    global.fetch = withFetchPreconnect(fetchMock);
     const state = makeBrowserState();
 
     const ctx = createBrowserRouteContext({ getState: () => state });
     const chrome = ctx.forProfile("chrome");
-    await expect(chrome.ensureTabAvailable()).rejects.toThrow(/no attached Chrome tabs/i);
+    await expect(chrome.ensureTabAvailable()).rejects.toThrow(/tab not found/i);
   });
+  // [lilac-end]
 });

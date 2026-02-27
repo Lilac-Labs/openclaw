@@ -13,6 +13,7 @@ import type { ResolvedBrowserProfile } from "./config.js";
 import { resolveProfile } from "./config.js";
 import {
   ensureChromeExtensionRelayServer,
+  getChromeExtensionRelayAuthHeaders,
   stopChromeExtensionRelayServer,
 } from "./extension-relay.js";
 import {
@@ -296,13 +297,11 @@ function createProfileContext(
         }
       }
 
-      if (await isReachable(600)) {
-        return;
-      }
-      // Relay server is up, but no attached tab yet. Prompt user to attach.
-      throw new Error(
-        `Chrome extension relay is running, but no tab is connected. Click the OpenClaw Chrome extension icon on a tab to attach it (profile "${profile.name}").`,
-      );
+      // [lilac] don't throw when extension not yet connected — ensureTabAvailable handles it
+      // was:
+      //   if (await isReachable(600)) { return; }
+      //   throw new Error(`Chrome extension relay is running, but no tab is connected...`);
+      return;
     }
 
     if (!httpReachable) {
@@ -370,13 +369,31 @@ function createProfileContext(
     const profileState = getProfileState();
     const tabs1 = await listTabs();
     if (tabs1.length === 0) {
+      // [lilac-start] ask extension to attach a tab instead of throwing
+      // was:
+      //   if (profile.driver === "extension") {
+      //     throw new Error(
+      //       `tab not found (no attached Chrome tabs for profile "${profile.name}"). ` +
+      //         "Click the OpenClaw Browser Relay toolbar icon on the tab you want to control (badge ON).",
+      //     );
+      //   }
       if (profile.driver === "extension") {
-        throw new Error(
-          `tab not found (no attached Chrome tabs for profile "${profile.name}"). ` +
-            "Click the OpenClaw Browser Relay toolbar icon on the tab you want to control (badge ON).",
-        );
+        await fetch(appendCdpPath(profile.cdpUrl, "/extension/request-tab-attach"), {
+          method: "POST",
+          headers: getChromeExtensionRelayAuthHeaders(profile.cdpUrl),
+        }).catch(() => {});
+        const tabDeadline = Date.now() + 10_000;
+        while (Date.now() < tabDeadline) {
+          const polled = await listTabs().catch(() => [] as BrowserTab[]);
+          if (polled.length > 0) {
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      } else {
+        await openTab("about:blank");
       }
-      await openTab("about:blank");
+      // [lilac-end]
     }
 
     const tabs = await listTabs();
