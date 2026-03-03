@@ -1,6 +1,7 @@
 import { fetchOk } from "./cdp.helpers.js";
 import { appendCdpPath } from "./cdp.js";
 import type { ResolvedBrowserProfile } from "./config.js";
+import { getChromeExtensionRelayAuthHeaders } from "./extension-relay.js";
 import type { PwAiModule } from "./pw-ai-module.js";
 import { getPwAiModule } from "./pw-ai-module.js";
 import type { BrowserTab, ProfileRuntimeState } from "./server-context.types.js";
@@ -32,13 +33,24 @@ export function createProfileSelectionOps({
     const profileState = getProfileState();
     const tabs1 = await listTabs();
     if (tabs1.length === 0) {
+      // [lilac-start] ask extension to attach a tab instead of throwing
       if (profile.driver === "extension") {
-        throw new Error(
-          `tab not found (no attached Chrome tabs for profile "${profile.name}"). ` +
-            "Click the OpenClaw Browser Relay toolbar icon on the tab you want to control (badge ON).",
-        );
+        await fetch(appendCdpPath(profile.cdpUrl, "/extension/request-tab-attach"), {
+          method: "POST",
+          headers: getChromeExtensionRelayAuthHeaders(profile.cdpUrl),
+        }).catch(() => {});
+        const tabDeadline = Date.now() + 10_000;
+        while (Date.now() < tabDeadline) {
+          const polled = await listTabs().catch(() => [] as BrowserTab[]);
+          if (polled.length > 0) {
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      } else {
+        await openTab("about:blank");
       }
-      await openTab("about:blank");
+      // [lilac-end]
     }
 
     const tabs = await listTabs();
