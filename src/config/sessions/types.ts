@@ -146,6 +146,10 @@ export type SessionEntry = {
   compactionCount?: number;
   memoryFlushAt?: number;
   memoryFlushCompactionCount?: number;
+  // [lilac-start] daily memory checkpoint tracking
+  /** Date string (YYYY-MM-DD) of the last daily memory checkpoint flush. */
+  memoryCheckpointDate?: string;
+  // [lilac-end]
   cliSessionIds?: Record<string, string>;
   claudeCliSessionId?: string;
   label?: string;

@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { estimateMessagesTokens } from "../../agents/compaction.js";
+// [lilac-start] daily memory checkpoint imports
+import { resolveCronStyleNow } from "../../agents/current-time.js";
 import { runWithModelFallback } from "../../agents/model-fallback.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import { runEmbeddedPiAgent } from "../../agents/pi-embedded.js";
@@ -31,12 +33,15 @@ import {
   resolveModelFallbackOptions,
 } from "./agent-runner-utils.js";
 import {
+  formatDateStampInTimezone, // [lilac]
   hasAlreadyFlushedForCurrentCompaction,
   resolveMemoryFlushContextWindowTokens,
   resolveMemoryFlushPromptForRun,
   resolveMemoryFlushSettings,
+  shouldRunDailyMemoryCheckpoint, // [lilac]
   shouldRunMemoryFlush,
 } from "./memory-flush.js";
+// [lilac-end]
 import type { FollowupRun } from "./queue.js";
 import { incrementCompactionCount } from "./session-updates.js";
 
@@ -350,6 +355,15 @@ export async function runMemoryFlushIfNeeded(params: {
   const shouldForceFlushByTranscriptSize =
     typeof transcriptByteSize === "number" && transcriptByteSize >= forceFlushTranscriptBytes;
 
+  // [lilac-start] daily memory checkpoint trigger
+  const { userTimezone } = resolveCronStyleNow(params.cfg, Date.now());
+  const dailyCheckpointNeeded = shouldRunDailyMemoryCheckpoint({
+    entry: entry ?? undefined,
+    nowMs: Date.now(),
+    timezone: userTimezone,
+  });
+  // [lilac-end]
+
   const transcriptUsageSnapshot = sessionLogSnapshot?.usage;
   const transcriptPromptTokens = transcriptUsageSnapshot?.promptTokens;
   const transcriptOutputTokens = transcriptUsageSnapshot?.outputTokens;
@@ -440,7 +454,8 @@ export async function runMemoryFlushIfNeeded(params: {
       })) ||
     (shouldForceFlushByTranscriptSize &&
       entry != null &&
-      !hasAlreadyFlushedForCurrentCompaction(entry));
+      !hasAlreadyFlushedForCurrentCompaction(entry)) ||
+    (dailyCheckpointNeeded && canAttemptFlush); // [lilac] daily checkpoint OR branch
 
   if (!shouldFlushMemory) {
     return entry ?? params.sessionEntry;
@@ -488,10 +503,14 @@ export async function runMemoryFlushIfNeeded(params: {
           ...senderContext,
           ...runBaseParams,
           trigger: "memory",
+          // [lilac-start] augment prompt for daily checkpoint
           prompt: resolveMemoryFlushPromptForRun({
-            prompt: memoryFlushSettings.prompt,
+            prompt: dailyCheckpointNeeded
+              ? `Daily memory checkpoint. Only store NEW memories from today — previous days' content was already saved to earlier date-stamped files.\n${memoryFlushSettings.prompt}`
+              : memoryFlushSettings.prompt,
             cfg: params.cfg,
           }),
+          // [lilac-end]
           extraSystemPrompt: flushSystemPrompt,
           onAgentEvent: (evt) => {
             if (evt.stream === "compaction") {
@@ -519,6 +538,10 @@ export async function runMemoryFlushIfNeeded(params: {
         memoryFlushCompactionCount = nextCount;
       }
     }
+    // [lilac-start] persist daily checkpoint date
+    const checkpointDate = dailyCheckpointNeeded
+      ? formatDateStampInTimezone(Date.now(), userTimezone)
+      : undefined;
     if (params.storePath && params.sessionKey) {
       try {
         const updatedEntry = await updateSessionStoreEntry({
@@ -527,6 +550,7 @@ export async function runMemoryFlushIfNeeded(params: {
           update: async () => ({
             memoryFlushAt: Date.now(),
             memoryFlushCompactionCount,
+            ...(checkpointDate ? { memoryCheckpointDate: checkpointDate } : {}), // [lilac-end]
           }),
         });
         if (updatedEntry) {

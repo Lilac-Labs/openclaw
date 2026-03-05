@@ -68,7 +68,9 @@ export type SessionSendPolicyConfig = {
   rules?: SessionSendPolicyRule[];
 };
 
-export type SessionResetMode = "daily" | "idle";
+// [lilac-start] add manual reset mode
+export type SessionResetMode = "daily" | "idle" | "manual";
+// [lilac-end]
 export type SessionResetConfig = {
   mode?: SessionResetMode;
   /** Local hour (0-23) for the daily reset boundary. */

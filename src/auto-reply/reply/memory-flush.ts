@@ -23,7 +23,8 @@ export const DEFAULT_MEMORY_FLUSH_SYSTEM_PROMPT = [
   `You may reply, but usually ${SILENT_REPLY_TOKEN} is correct.`,
 ].join(" ");
 
-function formatDateStampInTimezone(nowMs: number, timezone: string): string {
+// [lilac-start] export for daily memory checkpoint
+export function formatDateStampInTimezone(nowMs: number, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     year: "numeric",
@@ -38,6 +39,7 @@ function formatDateStampInTimezone(nowMs: number, timezone: string): string {
   }
   return new Date(nowMs).toISOString().slice(0, 10);
 }
+// [lilac-end]
 
 export function resolveMemoryFlushPromptForRun(params: {
   prompt: string;
@@ -180,3 +182,28 @@ export function hasAlreadyFlushedForCurrentCompaction(
   const lastFlushAt = entry.memoryFlushCompactionCount;
   return typeof lastFlushAt === "number" && lastFlushAt === compactionCount;
 }
+
+// [lilac-start] daily memory checkpoint
+/**
+ * Checks if a daily date boundary has been crossed since the last memory
+ * checkpoint. Uses the same atHour concept as daily session resets.
+ */
+export function shouldRunDailyMemoryCheckpoint(params: {
+  entry?: Pick<
+    SessionEntry,
+    "memoryCheckpointDate" | "compactionCount" | "memoryFlushCompactionCount"
+  >;
+  nowMs: number;
+  timezone: string;
+}): boolean {
+  if (!params.entry) {
+    return false;
+  }
+  if (hasAlreadyFlushedForCurrentCompaction(params.entry)) {
+    return false;
+  }
+  const todayDate = formatDateStampInTimezone(params.nowMs, params.timezone);
+  const lastCheckpointDate = params.entry.memoryCheckpointDate;
+  return todayDate !== lastCheckpointDate;
+}
+// [lilac-end]
