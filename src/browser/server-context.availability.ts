@@ -1,14 +1,5 @@
-import {
-  PROFILE_ATTACH_RETRY_TIMEOUT_MS,
-  PROFILE_POST_RESTART_WS_TIMEOUT_MS,
-  resolveCdpReachabilityTimeouts,
-} from "./cdp-timeouts.js";
-import {
-  isChromeCdpReady,
-  isChromeReachable,
-  launchOpenClawChrome,
-  stopOpenClawChrome,
-} from "./chrome.js";
+import { PROFILE_ATTACH_RETRY_TIMEOUT_MS, resolveCdpReachabilityTimeouts } from "./cdp-timeouts.js";
+import { isChromeCdpReady, isChromeReachable, stopOpenClawChrome } from "./chrome.js";
 import type { ResolvedBrowserProfile } from "./config.js";
 import { BrowserConfigurationError, BrowserProfileUnavailableError } from "./errors.js";
 import {
@@ -16,12 +7,6 @@ import {
   stopChromeExtensionRelayServer,
 } from "./extension-relay.js";
 import { getBrowserProfileCapabilities } from "./profile-capabilities.js";
-import {
-  CDP_READY_AFTER_LAUNCH_MAX_TIMEOUT_MS,
-  CDP_READY_AFTER_LAUNCH_MIN_TIMEOUT_MS,
-  CDP_READY_AFTER_LAUNCH_POLL_MS,
-  CDP_READY_AFTER_LAUNCH_WINDOW_MS,
-} from "./server-context.constants.js";
 import type {
   BrowserServerState,
   ContextOptions,
@@ -69,20 +54,6 @@ export function createProfileAvailability({
     return await isChromeReachable(profile.cdpUrl, httpTimeoutMs);
   };
 
-  const attachRunning = (running: NonNullable<ProfileRuntimeState["running"]>) => {
-    setProfileRunning(running);
-    running.proc.on("exit", () => {
-      // Guard against server teardown (e.g., SIGUSR1 restart)
-      if (!opts.getState()) {
-        return;
-      }
-      const profileState = getProfileState();
-      if (profileState.running?.pid === running.pid) {
-        setProfileRunning(null);
-      }
-    });
-  };
-
   const closePlaywrightBrowserConnectionForProfile = async (cdpUrl?: string): Promise<void> => {
     try {
       const mod = await import("./pw-ai.js");
@@ -113,27 +84,6 @@ export function createProfileAvailability({
     if (previousProfile.cdpUrl !== profile.cdpUrl) {
       await closePlaywrightBrowserConnectionForProfile(profile.cdpUrl);
     }
-  };
-
-  const waitForCdpReadyAfterLaunch = async (): Promise<void> => {
-    // launchOpenClawChrome() can return before Chrome is fully ready to serve /json/version + CDP WS.
-    // If a follow-up call races ahead, we can hit PortInUseError trying to launch again on the same port.
-    const deadlineMs = Date.now() + CDP_READY_AFTER_LAUNCH_WINDOW_MS;
-    while (Date.now() < deadlineMs) {
-      const remainingMs = Math.max(0, deadlineMs - Date.now());
-      // Keep each attempt short; loopback profiles derive a WS timeout from this value.
-      const attemptTimeoutMs = Math.max(
-        CDP_READY_AFTER_LAUNCH_MIN_TIMEOUT_MS,
-        Math.min(CDP_READY_AFTER_LAUNCH_MAX_TIMEOUT_MS, remainingMs),
-      );
-      if (await isReachable(attemptTimeoutMs)) {
-        return;
-      }
-      await new Promise((r) => setTimeout(r, CDP_READY_AFTER_LAUNCH_POLL_MS));
-    }
-    throw new Error(
-      `Chrome CDP websocket for profile "${profile.name}" is not reachable after start.`,
-    );
   };
 
   const ensureBrowserAvailable = async (): Promise<void> => {
@@ -182,16 +132,11 @@ export function createProfileAvailability({
             : `Browser attachOnly is enabled and profile "${profile.name}" is not running.`,
         );
       }
-      const launched = await launchOpenClawChrome(current.resolved, profile);
-      attachRunning(launched);
-      try {
-        await waitForCdpReadyAfterLaunch();
-      } catch (err) {
-        await stopOpenClawChrome(launched).catch(() => {});
-        setProfileRunning(null);
-        throw err;
-      }
-      return;
+      // [lilac-start] block managed Chrome launch — force extension relay usage
+      throw new Error(
+        `Managed browser launch is disabled. Use the Browser Relay extension (profile="chrome") instead.`,
+      );
+      // [lilac-end]
     }
 
     // Port is reachable - check if we own it.
@@ -223,17 +168,11 @@ export function createProfileAvailability({
       );
     }
 
-    await stopOpenClawChrome(profileState.running);
-    setProfileRunning(null);
-
-    const relaunched = await launchOpenClawChrome(current.resolved, profile);
-    attachRunning(relaunched);
-
-    if (!(await isReachable(PROFILE_POST_RESTART_WS_TIMEOUT_MS))) {
-      throw new Error(
-        `Chrome CDP websocket for profile "${profile.name}" is not reachable after restart.`,
-      );
-    }
+    // [lilac-start] block managed Chrome relaunch — force extension relay usage
+    throw new Error(
+      `Managed browser launch is disabled. Use the Browser Relay extension (profile="chrome") instead.`,
+    );
+    // [lilac-end]
   };
 
   const stopRunningBrowser = async (): Promise<{ stopped: boolean }> => {
