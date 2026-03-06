@@ -15,7 +15,9 @@ import { sensitive } from "./zod-schema.sensitive.js";
 
 const SessionResetConfigSchema = z
   .object({
-    mode: z.union([z.literal("daily"), z.literal("idle")]).optional(),
+    // [lilac-start] add manual reset mode
+    mode: z.union([z.literal("daily"), z.literal("idle"), z.literal("manual")]).optional(),
+    // [lilac-end]
     atHour: z.number().int().min(0).max(23).optional(),
     idleMinutes: z.number().int().positive().optional(),
   })

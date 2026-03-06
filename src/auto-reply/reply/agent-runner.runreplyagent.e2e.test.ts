@@ -176,6 +176,7 @@ function createMinimalRun(params?: {
         resolvedBlockStreamingBreak: "message_end",
         shouldInjectGroupIntro: false,
         typingMode: params?.typingMode ?? "instant",
+        resetAtHour: 4,
       });
     },
   };
@@ -283,6 +284,7 @@ async function runReplyAgentWithBase(params: {
     resolvedBlockStreamingBreak: "message_end",
     shouldInjectGroupIntro: false,
     typingMode: params.typingMode ?? "instant",
+    resetAtHour: 4,
   });
 }
 

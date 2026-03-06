@@ -174,6 +174,7 @@ describe("runReplyAgent onAgentRunStart", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
   }
 
@@ -301,6 +302,7 @@ describe("runReplyAgent authProfileId fallback scoping", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     expect(runEmbeddedPiAgentMock).toHaveBeenCalledTimes(1);
@@ -445,6 +447,7 @@ describe("runReplyAgent auto-compaction token update", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     const stored = JSON.parse(await fs.readFile(storePath, "utf-8"));
@@ -506,6 +509,7 @@ describe("runReplyAgent auto-compaction token update", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     const stored = JSON.parse(await fs.readFile(storePath, "utf-8"));
@@ -584,6 +588,7 @@ describe("runReplyAgent auto-compaction token update", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     const queuedSystemEvents = peekSystemEvents(sessionKey);
@@ -674,6 +679,7 @@ describe("runReplyAgent block streaming", () => {
       resolvedBlockStreamingBreak: "text_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     expect(onBlockReply).toHaveBeenCalledTimes(1);
@@ -776,6 +782,7 @@ describe("runReplyAgent block streaming", () => {
       resolvedBlockStreamingBreak: "text_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     await vi.advanceTimersByTimeAsync(5);
@@ -841,6 +848,7 @@ describe("runReplyAgent claude-cli routing", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
   }
 
@@ -942,6 +950,7 @@ describe("runReplyAgent messaging tool suppression", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
   }
 
@@ -1164,6 +1173,7 @@ describe("runReplyAgent reminder commitment guard", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
   }
 
@@ -1387,6 +1397,7 @@ describe("runReplyAgent fallback reasoning tags", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
   }
 
@@ -1507,6 +1518,7 @@ describe("runReplyAgent response usage footer", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
   }
 
@@ -1614,6 +1626,7 @@ describe("runReplyAgent transient HTTP retry", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     await vi.advanceTimersByTimeAsync(2_500);

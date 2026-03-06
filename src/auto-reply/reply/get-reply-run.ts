@@ -176,6 +176,7 @@ type RunPreparedReplyParams = {
   storePath?: string;
   workspaceDir: string;
   abortedLastRun: boolean;
+  resetAtHour: number;
 };
 
 export async function runPreparedReply(
@@ -542,5 +543,6 @@ export async function runPreparedReply(
     sessionCtx,
     shouldInjectGroupIntro,
     typingMode,
+    resetAtHour: params.resetAtHour,
   });
 }
