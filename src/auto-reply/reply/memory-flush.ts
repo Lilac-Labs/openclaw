@@ -5,7 +5,11 @@ import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR } from "../../agents/pi-settings.js";
 import { parseNonNegativeByteSize } from "../../config/byte-size.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import { resolveFreshSessionTotalTokens, type SessionEntry } from "../../config/sessions.js";
+import {
+  resolveDailyResetAtMs,
+  resolveFreshSessionTotalTokens,
+  type SessionEntry,
+} from "../../config/sessions.js";
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 
 export const DEFAULT_MEMORY_FLUSH_SOFT_TOKENS = 4000;
@@ -41,7 +45,8 @@ export const DEFAULT_MEMORY_FLUSH_SYSTEM_PROMPT = [
   `You may reply, but usually ${SILENT_REPLY_TOKEN} is correct.`,
 ].join(" ");
 
-function formatDateStampInTimezone(nowMs: number, timezone: string): string {
+// [lilac-start] export for daily memory checkpoint
+export function formatDateStampInTimezone(nowMs: number, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     year: "numeric",
@@ -56,6 +61,7 @@ function formatDateStampInTimezone(nowMs: number, timezone: string): string {
   }
   return new Date(nowMs).toISOString().slice(0, 10);
 }
+// [lilac-end]
 
 export function resolveMemoryFlushRelativePathForRun(params: {
   cfg?: OpenClawConfig;
@@ -246,3 +252,21 @@ export function computeContextHash(messages: Array<{ role?: string; content?: un
   const hash = crypto.createHash("sha256").update(payload).digest("hex");
   return hash.slice(0, 16);
 }
+
+// [lilac-start] daily memory checkpoint
+/**
+ * Checks if a daily date boundary has been crossed since the last memory
+ * checkpoint. Uses the same atHour concept as daily session resets.
+ */
+export function shouldRunDailyMemoryCheckpoint(params: {
+  entry?: Pick<SessionEntry, "memoryCheckpointAt">;
+  nowMs: number;
+  atHour: number;
+}): boolean {
+  if (!params.entry) {
+    return false;
+  }
+  const boundary = resolveDailyResetAtMs(params.nowMs, params.atHour);
+  return (params.entry.memoryCheckpointAt ?? 0) < boundary;
+}
+// [lilac-end]

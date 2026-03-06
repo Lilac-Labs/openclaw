@@ -103,6 +103,7 @@ describe("runReplyAgent media path normalization", () => {
       resolvedBlockStreamingBreak: "message_end",
       shouldInjectGroupIntro: false,
       typingMode: "instant",
+      resetAtHour: 4,
     });
 
     expect(result).toMatchObject({

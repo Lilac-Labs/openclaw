@@ -1124,8 +1124,10 @@ export const FIELD_HELP: Record<string, string> = {
     "Applies a legacy idle reset window in minutes for session reuse behavior across inactivity gaps. Use this only for compatibility and prefer structured reset policies under session.reset/session.resetByType.",
   "session.reset":
     "Defines the default reset policy object used when no type-specific or channel-specific override applies. Set this first, then layer resetByType or resetByChannel only where behavior must differ.",
+  // [lilac-start] add manual reset mode description
   "session.reset.mode":
-    'Selects reset strategy: "daily" resets at a configured hour and "idle" resets after inactivity windows. Keep one clear mode per policy to avoid surprising context turnover patterns.',
+    'Selects reset strategy: "daily" resets at a configured hour, "idle" resets after inactivity windows, and "manual" never auto-resets (only explicit /new or /reset). Keep one clear mode per policy to avoid surprising context turnover patterns.',
+  // [lilac-end]
   "session.reset.atHour":
     "Sets local-hour boundary (0-23) for daily reset mode so sessions roll over at predictable times. Use with mode=daily and align to operator timezone expectations for human-readable behavior.",
   "session.reset.idleMinutes":

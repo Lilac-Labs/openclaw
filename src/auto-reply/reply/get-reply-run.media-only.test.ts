@@ -162,6 +162,7 @@ function baseParams(
     sessionKey: "session-key",
     workspaceDir: "/tmp/workspace",
     abortedLastRun: false,
+    resetAtHour: 4,
     ...overrides,
   };
 }

@@ -177,6 +177,40 @@ describe("resolveSessionResetPolicy", () => {
   });
 });
 
+describe("evaluateSessionFreshness — manual mode", () => {
+  const now = Date.now();
+  const oldUpdatedAt = now - 7 * 24 * 60 * 60 * 1000; // 7 days ago
+
+  it("always returns fresh for manual mode regardless of age", () => {
+    const result = evaluateSessionFreshness({
+      updatedAt: oldUpdatedAt,
+      now,
+      policy: { mode: "manual", atHour: 4 },
+    });
+    expect(result.fresh).toBe(true);
+    expect(result.dailyResetAt).toBeUndefined();
+    expect(result.idleExpiresAt).toBeUndefined();
+  });
+
+  it("returns fresh for manual mode even when updatedAt is zero", () => {
+    const result = evaluateSessionFreshness({
+      updatedAt: 0,
+      now,
+      policy: { mode: "manual", atHour: 4 },
+    });
+    expect(result.fresh).toBe(true);
+  });
+
+  it("returns stale for daily mode when session predates reset hour", () => {
+    const result = evaluateSessionFreshness({
+      updatedAt: oldUpdatedAt,
+      now,
+      policy: { mode: "daily", atHour: 4 },
+    });
+    expect(result.fresh).toBe(false);
+  });
+});
+
 describe("session store lock (Promise chain mutex)", () => {
   let lockFixtureRoot = "";
   let lockCaseId = 0;

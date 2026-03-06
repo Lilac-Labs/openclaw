@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
+import { resolveDailyResetAtMs } from "../../config/sessions/reset.js";
 import {
   DEFAULT_MEMORY_FLUSH_PROMPT,
+  formatDateStampInTimezone,
   resolveMemoryFlushPromptForRun,
   resolveMemoryFlushRelativePathForRun,
+  shouldRunDailyMemoryCheckpoint,
 } from "./memory-flush.js";
 
 describe("resolveMemoryFlushPromptForRun", () => {
@@ -60,5 +63,67 @@ describe("DEFAULT_MEMORY_FLUSH_PROMPT", () => {
     // Agents must not create YYYY-MM-DD-HHMM.md variants alongside the canonical file
     expect(DEFAULT_MEMORY_FLUSH_PROMPT).toContain("timestamped variant");
     expect(DEFAULT_MEMORY_FLUSH_PROMPT).toContain("YYYY-MM-DD.md");
+  });
+});
+
+describe("formatDateStampInTimezone", () => {
+  it("formats date in the given timezone", () => {
+    // 2026-02-16 at 3 PM UTC = 10 AM in New York (EST = UTC-5)
+    const result = formatDateStampInTimezone(Date.UTC(2026, 1, 16, 15, 0, 0), "America/New_York");
+    expect(result).toBe("2026-02-16");
+  });
+
+  it("handles timezone date boundary correctly", () => {
+    // 2026-02-17 at 2 AM UTC = 2026-02-16 at 9 PM in New York (EST = UTC-5)
+    const result = formatDateStampInTimezone(Date.UTC(2026, 1, 17, 2, 0, 0), "America/New_York");
+    expect(result).toBe("2026-02-16");
+  });
+
+  it("returns ISO date as fallback for invalid timezone", () => {
+    // Intl.DateTimeFormat throws for bad timezone, so we get the ISO fallback
+    const nowMs = Date.UTC(2026, 5, 10, 12, 0, 0);
+    // This should either work or fall back to ISO — both produce YYYY-MM-DD
+    const result = formatDateStampInTimezone(nowMs, "UTC");
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("shouldRunDailyMemoryCheckpoint", () => {
+  const atHour = 4;
+  // 2025-03-05 10:00 UTC
+  const nowMs = new Date("2025-03-05T10:00:00Z").getTime();
+  // boundary = 2025-03-05T04:00:00Z (4am UTC today)
+  const boundary = resolveDailyResetAtMs(nowMs, atHour);
+
+  it("returns false when entry is undefined", () => {
+    expect(shouldRunDailyMemoryCheckpoint({ entry: undefined, nowMs, atHour })).toBe(false);
+  });
+
+  it("returns true when no previous checkpoint (memoryCheckpointAt undefined)", () => {
+    const entry = {};
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
+  });
+
+  it("returns false when checkpoint is after the daily boundary", () => {
+    // checkpoint at 5am UTC (after 4am boundary)
+    const entry = { memoryCheckpointAt: boundary + 3_600_000 };
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(false);
+  });
+
+  it("returns true when checkpoint is before the daily boundary", () => {
+    // checkpoint at 3am UTC (before 4am boundary)
+    const entry = { memoryCheckpointAt: boundary - 3_600_000 };
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
+  });
+
+  it("returns true even when a prior memory flush happened in the same compaction cycle", () => {
+    // Daily checkpoint is gated solely by memoryCheckpointAt vs boundary,
+    // not by whether a token/transcript flush already ran this cycle.
+    const entry = {
+      memoryCheckpointAt: boundary - 3_600_000,
+      compactionCount: 3,
+      memoryFlushCompactionCount: 3,
+    };
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
   });
 });

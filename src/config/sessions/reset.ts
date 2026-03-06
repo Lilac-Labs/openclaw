@@ -2,7 +2,9 @@ import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import type { SessionConfig, SessionResetConfig } from "../types.base.js";
 import { DEFAULT_IDLE_MINUTES } from "./types.js";
 
-export type SessionResetMode = "daily" | "idle";
+// [lilac-start] add manual reset mode
+export type SessionResetMode = "daily" | "idle" | "manual";
+// [lilac-end]
 export type SessionResetType = "direct" | "group" | "thread";
 
 export type SessionResetPolicy = {
@@ -141,6 +143,11 @@ export function evaluateSessionFreshness(params: {
   now: number;
   policy: SessionResetPolicy;
 }): SessionFreshness {
+  // [lilac-start] manual mode: sessions never auto-reset
+  if (params.policy.mode === "manual") {
+    return { fresh: true };
+  }
+  // [lilac-end]
   const dailyResetAt =
     params.policy.mode === "daily"
       ? resolveDailyResetAtMs(params.now, params.policy.atHour)

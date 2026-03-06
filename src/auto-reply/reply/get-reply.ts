@@ -440,6 +440,7 @@ export async function getReplyFromConfig(
     timeoutMs,
     isNewSession,
     resetTriggered,
+    resetAtHour: sessionState.resetAtHour,
     systemSent,
     sessionEntry,
     sessionStore,

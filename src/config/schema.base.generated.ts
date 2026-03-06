@@ -8745,6 +8745,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                     type: "string",
                     const: "idle",
                   },
+                  {
+                    type: "string",
+                    const: "manual",
+                  },
                 ],
               },
               atHour: {
@@ -8776,6 +8780,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                         type: "string",
                         const: "idle",
                       },
+                      {
+                        type: "string",
+                        const: "manual",
+                      },
                     ],
                   },
                   atHour: {
@@ -8803,6 +8811,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                       {
                         type: "string",
                         const: "idle",
+                      },
+                      {
+                        type: "string",
+                        const: "manual",
                       },
                     ],
                   },
@@ -8832,6 +8844,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                         type: "string",
                         const: "idle",
                       },
+                      {
+                        type: "string",
+                        const: "manual",
+                      },
                     ],
                   },
                   atHour: {
@@ -8859,6 +8875,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                       {
                         type: "string",
                         const: "idle",
+                      },
+                      {
+                        type: "string",
+                        const: "manual",
                       },
                     ],
                   },
@@ -8895,6 +8915,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                     {
                       type: "string",
                       const: "idle",
+                    },
+                    {
+                      type: "string",
+                      const: "manual",
                     },
                   ],
                 },
@@ -14359,7 +14383,7 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     },
     "session.reset.mode": {
       label: "Session Reset Mode",
-      help: 'Selects reset strategy: "daily" resets at a configured hour and "idle" resets after inactivity windows. Keep one clear mode per policy to avoid surprising context turnover patterns.',
+      help: 'Selects reset strategy: "daily" resets at a configured hour, "idle" resets after inactivity windows, and "manual" never auto-resets (only explicit /new or /reset). Keep one clear mode per policy to avoid surprising context turnover patterns.',
       tags: ["storage"],
     },
     "session.reset.atHour": {

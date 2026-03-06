@@ -69,6 +69,7 @@ export type SessionInitResult = {
   isGroup: boolean;
   bodyStripped?: string;
   triggerBodyNormalized: string;
+  resetAtHour: number;
 };
 
 function resolveAcpResetBindingContext(ctx: MsgContext): {
@@ -537,6 +538,9 @@ export async function initSessionState(params: {
     // Clear stale context hash so the first flush in the new session is not
     // incorrectly skipped due to a hash match with the old transcript (#30115).
     sessionEntry.memoryFlushContextHash = undefined;
+    // [lilac-start] clear daily memory checkpoint on new session
+    sessionEntry.memoryCheckpointAt = undefined;
+    // [lilac-end]
     // Clear stale token metrics from previous session so /status doesn't
     // display the old session's context usage after /new or /reset.
     sessionEntry.totalTokens = undefined;
@@ -642,5 +646,6 @@ export async function initSessionState(params: {
     isGroup,
     bodyStripped,
     triggerBodyNormalized,
+    resetAtHour: resetPolicy.atHour,
   };
 }
