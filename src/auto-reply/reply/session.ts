@@ -383,8 +383,8 @@ export async function initSessionState(params: {
     sessionEntry.compactionCount = 0;
     sessionEntry.memoryFlushCompactionCount = undefined;
     sessionEntry.memoryFlushAt = undefined;
-    // [lilac-start] clear daily memory checkpoint on new session
-    sessionEntry.memoryCheckpointAt = undefined;
+    // [lilac-start] mark checkpoint as current so /new doesn't immediately trigger a daily flush
+    sessionEntry.memoryCheckpointAt = Date.now();
     // [lilac-end]
     // Clear stale token metrics from previous session so /status doesn't
     // display the old session's context usage after /new or /reset.
