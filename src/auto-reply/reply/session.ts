@@ -60,6 +60,7 @@ export type SessionInitResult = {
   isGroup: boolean;
   bodyStripped?: string;
   triggerBodyNormalized: string;
+  resetAtHour: number;
 };
 
 export async function initSessionState(params: {
@@ -383,7 +384,7 @@ export async function initSessionState(params: {
     sessionEntry.memoryFlushCompactionCount = undefined;
     sessionEntry.memoryFlushAt = undefined;
     // [lilac-start] clear daily memory checkpoint on new session
-    sessionEntry.memoryCheckpointDate = undefined;
+    sessionEntry.memoryCheckpointAt = undefined;
     // [lilac-end]
     // Clear stale token metrics from previous session so /status doesn't
     // display the old session's context usage after /new or /reset.
@@ -489,5 +490,6 @@ export async function initSessionState(params: {
     isGroup,
     bodyStripped,
     triggerBodyNormalized,
+    resetAtHour: resetPolicy.atHour,
   };
 }

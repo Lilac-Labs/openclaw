@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
+import { resolveDailyResetAtMs } from "../../config/sessions/reset.js";
 import {
   formatDateStampInTimezone,
   resolveMemoryFlushPromptForRun,
@@ -63,63 +64,56 @@ describe("formatDateStampInTimezone", () => {
 });
 
 describe("shouldRunDailyMemoryCheckpoint", () => {
-  const tz = "America/New_York";
-  // 2026-03-05 noon UTC
-  const nowMs = Date.UTC(2026, 2, 5, 17, 0, 0);
+  const atHour = 4;
+  // 2025-03-05 10:00 UTC
+  const nowMs = new Date("2025-03-05T10:00:00Z").getTime();
+  // boundary = 2025-03-05T04:00:00Z (4am UTC today)
+  const boundary = resolveDailyResetAtMs(nowMs, atHour);
 
   it("returns false when entry is undefined", () => {
-    expect(shouldRunDailyMemoryCheckpoint({ entry: undefined, nowMs, timezone: tz })).toBe(false);
+    expect(shouldRunDailyMemoryCheckpoint({ entry: undefined, nowMs, atHour })).toBe(false);
   });
 
-  it("returns true when no previous checkpoint exists", () => {
+  it("returns true when no previous checkpoint (memoryCheckpointAt undefined)", () => {
     const entry = { compactionCount: 0, memoryFlushCompactionCount: undefined };
-    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, timezone: tz })).toBe(
-      true,
-    );
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
   });
 
-  it("returns false when checkpoint is for today", () => {
-    const todayDate = formatDateStampInTimezone(nowMs, tz);
+  it("returns false when checkpoint is after the daily boundary", () => {
+    // checkpoint at 5am UTC (after 4am boundary)
     const entry = {
-      memoryCheckpointDate: todayDate,
+      memoryCheckpointAt: boundary + 3_600_000,
       compactionCount: 0,
       memoryFlushCompactionCount: undefined,
     };
-    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, timezone: tz })).toBe(
-      false,
-    );
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(false);
   });
 
-  it("returns true when checkpoint is from yesterday", () => {
+  it("returns true when checkpoint is before the daily boundary", () => {
+    // checkpoint at 3am UTC (before 4am boundary)
     const entry = {
-      memoryCheckpointDate: "2026-03-04",
+      memoryCheckpointAt: boundary - 3_600_000,
       compactionCount: 0,
       memoryFlushCompactionCount: undefined,
     };
-    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, timezone: tz })).toBe(
-      true,
-    );
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
   });
 
   it("returns false when already flushed for current compaction cycle", () => {
     const entry = {
-      memoryCheckpointDate: "2026-03-04",
+      memoryCheckpointAt: boundary - 3_600_000,
       compactionCount: 3,
       memoryFlushCompactionCount: 3,
     };
-    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, timezone: tz })).toBe(
-      false,
-    );
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(false);
   });
 
   it("returns true when compaction count advanced past last flush", () => {
     const entry = {
-      memoryCheckpointDate: "2026-03-04",
+      memoryCheckpointAt: boundary - 3_600_000,
       compactionCount: 4,
       memoryFlushCompactionCount: 3,
     };
-    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, timezone: tz })).toBe(
-      true,
-    );
+    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
   });
 });

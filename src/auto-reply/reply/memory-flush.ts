@@ -4,7 +4,11 @@ import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR } from "../../agents/pi-settings.js";
 import { parseNonNegativeByteSize } from "../../config/byte-size.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import { resolveFreshSessionTotalTokens, type SessionEntry } from "../../config/sessions.js";
+import {
+  resolveDailyResetAtMs,
+  resolveFreshSessionTotalTokens,
+  type SessionEntry,
+} from "../../config/sessions.js";
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 
 export const DEFAULT_MEMORY_FLUSH_SOFT_TOKENS = 4000;
@@ -191,10 +195,10 @@ export function hasAlreadyFlushedForCurrentCompaction(
 export function shouldRunDailyMemoryCheckpoint(params: {
   entry?: Pick<
     SessionEntry,
-    "memoryCheckpointDate" | "compactionCount" | "memoryFlushCompactionCount"
+    "memoryCheckpointAt" | "compactionCount" | "memoryFlushCompactionCount"
   >;
   nowMs: number;
-  timezone: string;
+  atHour: number;
 }): boolean {
   if (!params.entry) {
     return false;
@@ -202,8 +206,7 @@ export function shouldRunDailyMemoryCheckpoint(params: {
   if (hasAlreadyFlushedForCurrentCompaction(params.entry)) {
     return false;
   }
-  const todayDate = formatDateStampInTimezone(params.nowMs, params.timezone);
-  const lastCheckpointDate = params.entry.memoryCheckpointDate;
-  return todayDate !== lastCheckpointDate;
+  const boundary = resolveDailyResetAtMs(params.nowMs, params.atHour);
+  return (params.entry.memoryCheckpointAt ?? 0) < boundary;
 }
 // [lilac-end]

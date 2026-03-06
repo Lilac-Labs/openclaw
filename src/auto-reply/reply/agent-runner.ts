@@ -89,6 +89,7 @@ export async function runReplyAgent(params: {
   sessionCtx: TemplateContext;
   shouldInjectGroupIntro: boolean;
   typingMode: TypingMode;
+  resetAtHour: number;
 }): Promise<ReplyPayload | ReplyPayload[] | undefined> {
   const {
     commandBody,
@@ -115,6 +116,7 @@ export async function runReplyAgent(params: {
     sessionCtx,
     shouldInjectGroupIntro,
     typingMode,
+    resetAtHour,
   } = params;
 
   let activeSessionEntry = sessionEntry;
@@ -232,6 +234,7 @@ export async function runReplyAgent(params: {
     sessionKey,
     storePath,
     isHeartbeat,
+    resetAtHour,
   });
 
   const runFollowupTurn = createFollowupRunner({
