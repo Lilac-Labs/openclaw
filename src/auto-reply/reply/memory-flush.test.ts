@@ -75,43 +75,28 @@ describe("shouldRunDailyMemoryCheckpoint", () => {
   });
 
   it("returns true when no previous checkpoint (memoryCheckpointAt undefined)", () => {
-    const entry = { compactionCount: 0, memoryFlushCompactionCount: undefined };
+    const entry = {};
     expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
   });
 
   it("returns false when checkpoint is after the daily boundary", () => {
     // checkpoint at 5am UTC (after 4am boundary)
-    const entry = {
-      memoryCheckpointAt: boundary + 3_600_000,
-      compactionCount: 0,
-      memoryFlushCompactionCount: undefined,
-    };
+    const entry = { memoryCheckpointAt: boundary + 3_600_000 };
     expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(false);
   });
 
   it("returns true when checkpoint is before the daily boundary", () => {
     // checkpoint at 3am UTC (before 4am boundary)
-    const entry = {
-      memoryCheckpointAt: boundary - 3_600_000,
-      compactionCount: 0,
-      memoryFlushCompactionCount: undefined,
-    };
+    const entry = { memoryCheckpointAt: boundary - 3_600_000 };
     expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);
   });
 
-  it("returns false when already flushed for current compaction cycle", () => {
+  it("returns true even when a prior memory flush happened in the same compaction cycle", () => {
+    // Daily checkpoint is gated solely by memoryCheckpointAt vs boundary,
+    // not by whether a token/transcript flush already ran this cycle.
     const entry = {
       memoryCheckpointAt: boundary - 3_600_000,
       compactionCount: 3,
-      memoryFlushCompactionCount: 3,
-    };
-    expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(false);
-  });
-
-  it("returns true when compaction count advanced past last flush", () => {
-    const entry = {
-      memoryCheckpointAt: boundary - 3_600_000,
-      compactionCount: 4,
       memoryFlushCompactionCount: 3,
     };
     expect(shouldRunDailyMemoryCheckpoint({ entry: entry as never, nowMs, atHour })).toBe(true);

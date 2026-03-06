@@ -193,17 +193,11 @@ export function hasAlreadyFlushedForCurrentCompaction(
  * checkpoint. Uses the same atHour concept as daily session resets.
  */
 export function shouldRunDailyMemoryCheckpoint(params: {
-  entry?: Pick<
-    SessionEntry,
-    "memoryCheckpointAt" | "compactionCount" | "memoryFlushCompactionCount"
-  >;
+  entry?: Pick<SessionEntry, "memoryCheckpointAt">;
   nowMs: number;
   atHour: number;
 }): boolean {
   if (!params.entry) {
-    return false;
-  }
-  if (hasAlreadyFlushedForCurrentCompaction(params.entry)) {
     return false;
   }
   const boundary = resolveDailyResetAtMs(params.nowMs, params.atHour);
