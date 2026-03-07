@@ -9,6 +9,7 @@ import type {
 import { chromium } from "playwright-core";
 import { formatErrorMessage } from "../infra/errors.js";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { withNoProxyForCdpUrl } from "./cdp-proxy-bypass.js";
 import {
   appendCdpPath,
@@ -20,6 +21,8 @@ import {
 import { normalizeCdpWsUrl } from "./cdp.js";
 import { getChromeWebSocketUrl } from "./chrome.js";
 import { BrowserTabNotFoundError } from "./errors.js";
+
+const log = createSubsystemLogger("browser").child("pw-session");
 import {
   assertBrowserNavigationAllowed,
   assertBrowserNavigationRedirectChainAllowed,
@@ -449,6 +452,11 @@ async function findPageByTargetId(
   cdpUrl?: string,
 ): Promise<Page | null> {
   const pages = await getAllPages(browser);
+  log.info(`findPageByTargetId: entry`, {
+    targetId,
+    pageCount: pages.length,
+    pageUrls: pages.map((p) => p.url()),
+  });
   const isExtensionRelay = cdpUrl
     ? await isExtensionRelayCdpEndpoint(cdpUrl).catch(() => false)
     : false;
@@ -456,11 +464,13 @@ async function findPageByTargetId(
     try {
       const matched = await findPageByTargetIdViaTargetList(pages, targetId, cdpUrl);
       if (matched) {
+        log.info(`findPageByTargetId: matched via target list`, { targetId });
         return matched;
       }
     } catch {
       // Ignore fetch errors and fall through to best-effort single-page fallback.
     }
+    log.info(`findPageByTargetId: extension relay fallback`, { singlePage: pages.length === 1 });
     return pages.length === 1 ? (pages[0] ?? null) : null;
   }
 
@@ -474,19 +484,39 @@ async function findPageByTargetId(
       tid = null;
     }
     if (tid && tid === targetId) {
+      log.info(`findPageByTargetId: matched via CDP session`, { targetId, url: page.url() });
       return page;
     }
   }
+  if (!resolvedViaCdp && pages.length === 1) {
+    log.info(`findPageByTargetId: CDP blocked, single-page fallback`, {
+      targetId,
+      url: pages[0].url(),
+    });
+    return pages[0];
+  }
+  if (!resolvedViaCdp) {
+    log.warn(
+      `findPageByTargetId: CDP session resolution failed for all ${pages.length} pages, trying URL-based fallback`,
+      { targetId },
+    );
+  }
   if (cdpUrl) {
     try {
-      return await findPageByTargetIdViaTargetList(pages, targetId, cdpUrl);
+      const matched = await findPageByTargetIdViaTargetList(pages, targetId, cdpUrl);
+      if (matched) {
+        log.info(`findPageByTargetId: matched via target list fallback`, { targetId });
+        return matched;
+      }
     } catch {
-      // Ignore fetch errors and fall through to return null.
+      log.warn(`findPageByTargetId: target list fallback failed`, { targetId });
     }
   }
-  if (!resolvedViaCdp && pages.length === 1) {
-    return pages[0] ?? null;
-  }
+  log.warn(`findPageByTargetId: returning null — no resolution path succeeded`, {
+    targetId,
+    pageCount: pages.length,
+    resolvedViaCdp,
+  });
   return null;
 }
 
@@ -494,11 +524,16 @@ async function resolvePageByTargetIdOrThrow(opts: {
   cdpUrl: string;
   targetId: string;
 }): Promise<Page> {
+  log.info(`resolvePageByTargetIdOrThrow: entry`, { targetId: opts.targetId, cdpUrl: opts.cdpUrl });
   const { browser } = await connectBrowser(opts.cdpUrl);
   const page = await findPageByTargetId(browser, opts.targetId, opts.cdpUrl);
   if (!page) {
+    log.error(`resolvePageByTargetIdOrThrow: throwing "tab not found"`, {
+      targetId: opts.targetId,
+    });
     throw new BrowserTabNotFoundError();
   }
+  log.info(`resolvePageByTargetIdOrThrow: resolved`, { targetId: opts.targetId, url: page.url() });
   return page;
 }
 
@@ -515,16 +550,31 @@ export async function getPageForTargetId(opts: {
   if (!opts.targetId) {
     return first;
   }
+  log.info(`getPageForTargetId: looking up targetId`, {
+    targetId: opts.targetId,
+    pageCount: pages.length,
+    pageUrls: pages.map((p) => p.url()),
+  });
   const found = await findPageByTargetId(browser, opts.targetId, opts.cdpUrl);
   if (!found) {
     // Extension relays can block CDP attachment APIs (e.g. Target.attachToBrowserTarget),
     // which prevents us from resolving a page's targetId via newCDPSession(). If Playwright
     // only exposes a single Page, use it as a best-effort fallback.
     if (pages.length === 1) {
+      log.info(`getPageForTargetId: single-page fallback`, {
+        targetId: opts.targetId,
+        url: first.url(),
+      });
       return first;
     }
+    log.error(`getPageForTargetId: throwing "tab not found"`, {
+      targetId: opts.targetId,
+      pageCount: pages.length,
+      pageUrls: pages.map((p) => p.url()),
+    });
     throw new BrowserTabNotFoundError();
   }
+  log.info(`getPageForTargetId: resolved`, { targetId: opts.targetId, url: found.url() });
   return found;
 }
 
