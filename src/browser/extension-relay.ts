@@ -274,6 +274,10 @@ export async function ensureChromeExtensionRelayServer(opts: {
     let extensionWs: WebSocket | null = null;
     const cdpClients = new Set<WebSocket>();
     const connectedTargets = new Map<string, ConnectedTarget>();
+    // Virtual sessionId → real sessionId mapping for Target.attachToTarget.
+    // Playwright expects unique sessionIds per attachment; the relay returns virtual ones
+    // and translates them to the real extension sessionIds when routing commands.
+    const virtualSessions = new Map<string, string>();
     const extensionConnected = () => extensionWs?.readyState === WebSocket.OPEN;
     const hasConnectedTargets = () => connectedTargets.size > 0;
     let extensionDisconnectCleanupTimer: NodeJS.Timeout | null = null;
@@ -498,6 +502,25 @@ export async function ensureChromeExtensionRelayServer(opts: {
     };
 
     const routeCdpCommand = async (cmd: CdpCommand): Promise<unknown> => {
+      // Translate virtual sessionIds to real extension sessionIds.
+      // Also handle detach/cleanup for virtual and browser sessions.
+      if (cmd.sessionId) {
+        if (virtualSessions.has(cmd.sessionId)) {
+          cmd = { ...cmd, sessionId: virtualSessions.get(cmd.sessionId) };
+        } else if (cmd.sessionId.startsWith("browser-session-")) {
+          // Browser-level session — strip sessionId so commands route through
+          // the root-session switch cases (e.g., Target.attachToTarget).
+          cmd = { ...cmd, sessionId: undefined };
+        }
+      }
+      if (cmd.method === "Target.detachFromTarget") {
+        const detachParams = (cmd.params ?? {}) as { sessionId?: string };
+        const sid = detachParams.sessionId;
+        if (sid && (virtualSessions.has(sid) || sid.startsWith("browser-session-"))) {
+          virtualSessions.delete(sid);
+          return {};
+        }
+      }
       switch (cmd.method) {
         case "Browser.getVersion":
           return {
@@ -556,7 +579,15 @@ export async function ensureChromeExtensionRelayServer(opts: {
           }
           for (const t of connectedTargets.values()) {
             if (t.targetId === targetId) {
-              return { sessionId: t.sessionId };
+              // Return a unique virtual sessionId so Playwright doesn't overwrite
+              // its existing session for this target. Commands on the virtual session
+              // are translated to the real sessionId before forwarding to the extension.
+              const virtualSessionId = `cdp-session-${nextExtensionId++}`;
+              virtualSessions.set(virtualSessionId, t.sessionId);
+              log.info(
+                `Target.attachToTarget: targetId=${targetId} → virtual=${virtualSessionId} real=${t.sessionId}`,
+              );
+              return { sessionId: virtualSessionId };
             }
           }
           throw new Error("target not found");
@@ -1020,6 +1051,8 @@ export async function ensureChromeExtensionRelayServer(opts: {
           log.debug(`extension reconnected, proceeding with command ${cmd.method}`);
         }
 
+        // Save original sessionId before routeCdpCommand translates virtual→real
+        const originalSessionId = cmd.sessionId;
         try {
           const result = await routeCdpCommand(cmd);
 
@@ -1039,7 +1072,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
           // _onAttachedToTarget to assert "Duplicate target" and crash.
           // Playwright only needs the command response ({ sessionId }), not the event.
 
-          sendResponseToCdp(ws, { id: cmd.id, sessionId: cmd.sessionId, result });
+          sendResponseToCdp(ws, { id: cmd.id, sessionId: originalSessionId, result });
         } catch (err) {
           log.warn(
             `CDP command failed: method=${cmd.method} error=${err instanceof Error ? err.message : String(err)}`,
@@ -1047,7 +1080,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
           pruneStaleTargetsFromCommandFailure(cmd, err);
           sendResponseToCdp(ws, {
             id: cmd.id,
-            sessionId: cmd.sessionId,
+            sessionId: originalSessionId,
             error: { message: err instanceof Error ? err.message : String(err) },
           });
         }
