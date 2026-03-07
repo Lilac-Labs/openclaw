@@ -480,6 +480,38 @@ async function findPageByTargetId(
               }
             }
           }
+          // Origin-based fallback: SPA navigations (pushState/replaceState) can change
+          // the page URL without the relay knowing, making the relay URL stale.
+          // Match by origin (protocol+host) when exact URL matching fails.
+          if (urlMatch.length === 0 && target.url) {
+            try {
+              const targetOrigin = new URL(target.url).origin;
+              const originMatch = pages.filter((p) => {
+                try {
+                  return new URL(p.url()).origin === targetOrigin;
+                } catch {
+                  return false;
+                }
+              });
+              if (originMatch.length === 1) {
+                log.info(`findPageByTargetId: unique origin match`, {
+                  targetId,
+                  targetUrl: target.url,
+                  pageUrl: originMatch[0].url(),
+                });
+                return originMatch[0];
+              }
+              if (originMatch.length > 1) {
+                log.warn(`findPageByTargetId: multiple origin matches, cannot disambiguate`, {
+                  targetId,
+                  targetUrl: target.url,
+                  originMatchUrls: originMatch.map((p) => p.url()),
+                });
+              }
+            } catch {
+              // Invalid URL — fall through
+            }
+          }
           log.warn(
             `findPageByTargetId: target found in /json/list but no Playwright page matched`,
             {
