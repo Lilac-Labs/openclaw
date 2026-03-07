@@ -9,10 +9,13 @@ import type {
 import { chromium } from "playwright-core";
 import { formatErrorMessage } from "../infra/errors.js";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { withNoProxyForCdpUrl } from "./cdp-proxy-bypass.js";
 import { appendCdpPath, fetchJson, getHeadersWithAuth, withCdpSocket } from "./cdp.helpers.js";
 import { normalizeCdpWsUrl } from "./cdp.js";
 import { getChromeWebSocketUrl } from "./chrome.js";
+
+const log = createSubsystemLogger("browser").child("pw-session");
 import {
   assertBrowserNavigationAllowed,
   assertBrowserNavigationResultAllowed,
@@ -394,6 +397,11 @@ async function findPageByTargetId(
   cdpUrl?: string,
 ): Promise<Page | null> {
   const pages = await getAllPages(browser);
+  log.info(`findPageByTargetId: entry`, {
+    targetId,
+    pageCount: pages.length,
+    pageUrls: pages.map((p) => p.url()),
+  });
   let resolvedViaCdp = false;
   // First, try the standard CDP session approach
   for (const page of pages) {
@@ -405,13 +413,24 @@ async function findPageByTargetId(
       tid = null;
     }
     if (tid && tid === targetId) {
+      log.info(`findPageByTargetId: matched via CDP session`, { targetId, url: page.url() });
       return page;
     }
   }
   // Extension relays can block CDP attachment APIs entirely. If that happens and
   // Playwright only exposes one page, return it as the best available mapping.
   if (!resolvedViaCdp && pages.length === 1) {
+    log.info(`findPageByTargetId: CDP blocked, single-page fallback`, {
+      targetId,
+      url: pages[0].url(),
+    });
     return pages[0];
+  }
+  if (!resolvedViaCdp) {
+    log.warn(
+      `findPageByTargetId: CDP session resolution failed for all ${pages.length} pages, trying URL-based fallback`,
+      { targetId },
+    );
   }
   // If CDP sessions fail (e.g., extension relay blocks Target.attachToBrowserTarget),
   // fall back to URL-based matching using the /json/list endpoint
@@ -429,11 +448,20 @@ async function findPageByTargetId(
           url: string;
           title?: string;
         }>;
+        log.info(`findPageByTargetId: /json/list returned ${targets.length} targets`, {
+          targetId,
+          targetIds: targets.map((t) => t.id),
+        });
         const target = targets.find((t) => t.id === targetId);
         if (target) {
+          log.info(`findPageByTargetId: found target in /json/list`, {
+            targetId,
+            targetUrl: target.url,
+          });
           // Try to find a page with matching URL
           const urlMatch = pages.filter((p) => p.url() === target.url);
           if (urlMatch.length === 1) {
+            log.info(`findPageByTargetId: unique URL match`, { targetId, url: target.url });
             return urlMatch[0];
           }
           // If multiple URL matches, use index-based matching as fallback
@@ -443,16 +471,40 @@ async function findPageByTargetId(
             if (sameUrlTargets.length === urlMatch.length) {
               const idx = sameUrlTargets.findIndex((t) => t.id === targetId);
               if (idx >= 0 && idx < urlMatch.length) {
+                log.info(`findPageByTargetId: index-based URL match`, {
+                  targetId,
+                  url: target.url,
+                  idx,
+                });
                 return urlMatch[idx];
               }
             }
           }
+          log.warn(
+            `findPageByTargetId: target found in /json/list but no Playwright page matched`,
+            {
+              targetId,
+              targetUrl: target.url,
+              urlMatchCount: urlMatch.length,
+              pageUrls: pages.map((p) => p.url()),
+            },
+          );
+        } else {
+          log.warn(`findPageByTargetId: targetId not in /json/list`, {
+            targetId,
+            availableTargetIds: targets.map((t) => t.id),
+          });
         }
       }
     } catch {
-      // Ignore fetch errors and fall through to return null
+      log.warn(`findPageByTargetId: /json/list fetch failed`, { targetId });
     }
   }
+  log.warn(`findPageByTargetId: returning null — no resolution path succeeded`, {
+    targetId,
+    pageCount: pages.length,
+    resolvedViaCdp,
+  });
   return null;
 }
 
@@ -460,11 +512,16 @@ async function resolvePageByTargetIdOrThrow(opts: {
   cdpUrl: string;
   targetId: string;
 }): Promise<Page> {
+  log.info(`resolvePageByTargetIdOrThrow: entry`, { targetId: opts.targetId, cdpUrl: opts.cdpUrl });
   const { browser } = await connectBrowser(opts.cdpUrl);
   const page = await findPageByTargetId(browser, opts.targetId, opts.cdpUrl);
   if (!page) {
+    log.error(`resolvePageByTargetIdOrThrow: throwing "tab not found"`, {
+      targetId: opts.targetId,
+    });
     throw new Error("tab not found");
   }
+  log.info(`resolvePageByTargetIdOrThrow: resolved`, { targetId: opts.targetId, url: page.url() });
   return page;
 }
 
@@ -481,16 +538,31 @@ export async function getPageForTargetId(opts: {
   if (!opts.targetId) {
     return first;
   }
+  log.info(`getPageForTargetId: looking up targetId`, {
+    targetId: opts.targetId,
+    pageCount: pages.length,
+    pageUrls: pages.map((p) => p.url()),
+  });
   const found = await findPageByTargetId(browser, opts.targetId, opts.cdpUrl);
   if (!found) {
     // Extension relays can block CDP attachment APIs (e.g. Target.attachToBrowserTarget),
     // which prevents us from resolving a page's targetId via newCDPSession(). If Playwright
     // only exposes a single Page, use it as a best-effort fallback.
     if (pages.length === 1) {
+      log.info(`getPageForTargetId: single-page fallback`, {
+        targetId: opts.targetId,
+        url: first.url(),
+      });
       return first;
     }
+    log.error(`getPageForTargetId: throwing "tab not found"`, {
+      targetId: opts.targetId,
+      pageCount: pages.length,
+      pageUrls: pages.map((p) => p.url()),
+    });
     throw new Error("tab not found");
   }
+  log.info(`getPageForTargetId: resolved`, { targetId: opts.targetId, url: found.url() });
   return found;
 }
 
