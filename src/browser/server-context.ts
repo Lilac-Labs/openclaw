@@ -1,4 +1,5 @@
 import { SsrFBlockedError } from "../infra/net/ssrf.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { isChromeReachable, resolveOpenClawUserDataDir } from "./chrome.js";
 import type { ResolvedBrowserProfile } from "./config.js";
 import { resolveProfile } from "./config.js";
@@ -22,6 +23,8 @@ import type {
   ProfileStatus,
 } from "./server-context.types.js";
 
+const log = createSubsystemLogger("browser/context");
+
 export type {
   BrowserRouteContext,
   BrowserServerState,
@@ -36,6 +39,7 @@ export function listKnownProfileNames(state: BrowserServerState): string[] {
   for (const name of state.profiles.keys()) {
     names.add(name);
   }
+  log.debug(`listKnownProfileNames: ${names.size} profiles`);
   return [...names];
 }
 
@@ -58,6 +62,7 @@ function createProfileContext(
     const current = state();
     let profileState = current.profiles.get(profile.name);
     if (!profileState) {
+      log.debug(`creating runtime state for profile "${profile.name}"`);
       profileState = { profile, running: null, lastTargetId: null, reconcile: null };
       current.profiles.set(profile.name, profileState);
     }
@@ -129,6 +134,7 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
   const forProfile = (profileName?: string): ProfileContext => {
     const current = state();
     const name = profileName ?? current.resolved.defaultProfile;
+    log.debug(`forProfile: resolving profile "${name}"`);
     const profile = resolveBrowserProfileWithHotReload({
       current,
       refreshConfigFromDisk,
@@ -137,6 +143,7 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
 
     if (!profile) {
       const available = Object.keys(current.resolved.profiles).join(", ");
+      log.warn(`profile "${name}" not found, available: ${available || "(none)"}`);
       throw new BrowserProfileNotFoundError(
         `Profile "${name}" not found. Available profiles: ${available || "(none)"}`,
       );
@@ -145,6 +152,7 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
   };
 
   const listProfiles = async (): Promise<ProfileStatus[]> => {
+    log.debug("listProfiles: enumerating all profiles");
     const current = state();
     refreshResolvedBrowserConfigFromDisk({
       current,
@@ -169,8 +177,9 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
           const ctx = createProfileContext(opts, profile);
           const tabs = await ctx.listTabs();
           tabCount = tabs.filter((t) => t.type === "page").length;
+          log.debug(`profile "${name}": running (state), ${tabCount} page tabs`);
         } catch {
-          // Browser might not be responsive
+          log.warn(`profile "${name}": marked running but browser not responsive`);
         }
       } else {
         // Check if something is listening on the port
@@ -181,9 +190,10 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
             const ctx = createProfileContext(opts, profile);
             const tabs = await ctx.listTabs().catch(() => []);
             tabCount = tabs.filter((t) => t.type === "page").length;
+            log.debug(`profile "${name}": running (reachable), ${tabCount} page tabs`);
           }
         } catch {
-          // Not reachable
+          log.debug(`profile "${name}": not reachable on ${profile.cdpUrl}`);
         }
       }
 
@@ -201,6 +211,9 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
       });
     }
 
+    log.info(
+      `listProfiles: ${result.length} profiles, ${result.filter((p) => p.running).length} running`,
+    );
     return result;
   };
 
@@ -213,9 +226,11 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
       return browserMapped;
     }
     if (err instanceof SsrFBlockedError) {
+      log.warn(`SSRF blocked: ${err.message}`);
       return { status: 400, message: err.message };
     }
     if (err instanceof InvalidBrowserNavigationUrlError) {
+      log.warn(`invalid navigation URL: ${err.message}`);
       return { status: 400, message: err.message };
     }
     return null;

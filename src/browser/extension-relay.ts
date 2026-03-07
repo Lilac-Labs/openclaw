@@ -5,6 +5,9 @@ import type { Duplex } from "node:stream";
 import WebSocket, { WebSocketServer } from "ws";
 import { isLoopbackAddress, isLoopbackHost } from "../gateway/net.js";
 import { rawDataToString } from "../infra/ws.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
+
+const log = createSubsystemLogger("browser").child("extension-relay");
 import {
   probeAuthenticatedOpenClawRelay,
   resolveRelayAcceptedTokensForPort,
@@ -235,20 +238,25 @@ export async function ensureChromeExtensionRelayServer(opts: {
   const existing = relayRuntimeByPort.get(info.port);
   if (existing) {
     if (existing.server.bindHost !== bindHost) {
+      log.debug(`relay on port ${info.port} has different bindHost, restarting`);
       await existing.server.stop();
     } else {
+      log.debug(`relay already running on port ${info.port}, reusing`);
       return existing.server;
     }
   }
 
   const inFlight = relayInitByPort.get(info.port);
   if (inFlight) {
+    log.debug(`relay init already in-flight for port ${info.port}, awaiting`);
     const server = await inFlight;
     if (server.bindHost === bindHost) {
       return server;
     }
     await server.stop();
   }
+
+  log.info(`initializing relay server for ${info.baseUrl}`);
 
   const extensionReconnectGraceMs = envMsOrDefault(
     "OPENCLAW_EXTENSION_RELAY_RECONNECT_GRACE_MS",
@@ -291,6 +299,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
     };
 
     const closeCdpClientsAfterExtensionDisconnect = () => {
+      log.warn(
+        `extension disconnect cleanup: clearing ${connectedTargets.size} targets, closing ${cdpClients.size} CDP clients`,
+      );
       connectedTargets.clear();
       for (const client of cdpClients) {
         try {
@@ -305,9 +316,11 @@ export async function ensureChromeExtensionRelayServer(opts: {
 
     const scheduleExtensionDisconnectCleanup = () => {
       clearExtensionDisconnectCleanupTimer();
+      log.info(`scheduling extension disconnect cleanup in ${extensionReconnectGraceMs}ms`);
       extensionDisconnectCleanupTimer = setTimeout(() => {
         extensionDisconnectCleanupTimer = null;
         if (extensionConnected()) {
+          log.info("extension reconnected before cleanup timer fired, skipping cleanup");
           return;
         }
         closeCdpClientsAfterExtensionDisconnect();
@@ -349,12 +362,19 @@ export async function ensureChromeExtensionRelayServer(opts: {
     const sendToExtension = async (payload: ExtensionForwardCommandMessage): Promise<unknown> => {
       const ws = extensionWs;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log.warn(
+          `sendToExtension failed: extension not connected (method=${payload.params.method})`,
+        );
         throw new Error("Chrome extension not connected");
       }
+      log.debug(
+        `forwarding to extension: ${payload.params.method}${payload.params.sessionId ? ` sessionId=${payload.params.sessionId}` : ""}`,
+      );
       ws.send(JSON.stringify(payload));
       return await new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => {
           pendingExtension.delete(payload.id);
+          log.error(`extension request timeout: ${payload.params.method} (id=${payload.id})`);
           reject(new Error(`extension request timeout: ${payload.params.method}`));
         }, 30_000);
         pendingExtension.set(payload.id, { resolve, reject, timer });
@@ -384,6 +404,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
         return undefined;
       }
       connectedTargets.delete(sessionId);
+      log.info(
+        `dropped target session: sessionId=${sessionId} targetId=${existing.targetId} (remaining=${connectedTargets.size})`,
+      );
       return existing;
     };
 
@@ -395,6 +418,11 @@ export async function ensureChromeExtensionRelayServer(opts: {
         }
         connectedTargets.delete(sessionId);
         removed.push(target);
+      }
+      if (removed.length > 0) {
+        log.info(
+          `dropped ${removed.length} target(s) by targetId=${targetId} (remaining=${connectedTargets.size})`,
+        );
       }
       return removed;
     };
@@ -424,6 +452,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
       if (!isMissingTargetError(err)) {
         return;
       }
+      log.warn(
+        `pruning stale targets after command failure: method=${cmd.method} error=${err instanceof Error ? err.message : String(err)}`,
+      );
       if (cmd.sessionId) {
         const removed = dropConnectedTargetSession(cmd.sessionId);
         if (removed) {
@@ -637,6 +668,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
 
       const listPaths = new Set(["/json", "/json/", "/json/list", "/json/list/"]);
       if (listPaths.has(path) && (req.method === "GET" || req.method === "PUT")) {
+        log.debug(`/json/list: returning ${connectedTargets.size} tab(s)`);
         const list = Array.from(connectedTargets.values()).map((t) => ({
           id: t.targetId,
           type: t.targetInfo.type ?? "page",
@@ -711,12 +743,14 @@ export async function ensureChromeExtensionRelayServer(opts: {
       // When bindHost is explicitly non-loopback (e.g. 0.0.0.0 for WSL2),
       // allow non-loopback connections; otherwise enforce loopback-only.
       if (!isLoopbackAddress(remote) && isLoopbackHost(bindHost)) {
+        log.warn(`rejected WebSocket upgrade from non-loopback address: ${remote}`);
         rejectUpgrade(socket, 403, "Forbidden");
         return;
       }
 
       const origin = headerValue(req.headers.origin);
       if (origin && !origin.startsWith("chrome-extension://")) {
+        log.warn(`rejected WebSocket upgrade with invalid origin: ${origin}`);
         rejectUpgrade(socket, 403, "Forbidden: invalid origin");
         return;
       }
@@ -724,11 +758,15 @@ export async function ensureChromeExtensionRelayServer(opts: {
       if (pathname === "/extension") {
         const token = getRelayAuthTokenFromRequest(req, url);
         if (!token || !relayAuthTokens.has(token)) {
+          log.warn("rejected extension WebSocket upgrade: unauthorized");
           rejectUpgrade(socket, 401, "Unauthorized");
           return;
         }
         // MV3 worker reconnect races can leave a stale non-OPEN socket reference.
         if (extensionWs && extensionWs.readyState !== WebSocket.OPEN) {
+          log.info(
+            "terminating stale extension WebSocket reference before accepting new connection",
+          );
           try {
             extensionWs.terminate();
           } catch {
@@ -737,6 +775,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
           extensionWs = null;
         }
         if (extensionConnected()) {
+          log.warn("rejected extension WebSocket upgrade: already connected");
           rejectUpgrade(socket, 409, "Extension already connected");
           return;
         }
@@ -749,9 +788,11 @@ export async function ensureChromeExtensionRelayServer(opts: {
       if (pathname === "/cdp") {
         const token = getRelayAuthTokenFromRequest(req, url);
         if (!token || !relayAuthTokens.has(token)) {
+          log.warn("rejected CDP WebSocket upgrade: unauthorized");
           rejectUpgrade(socket, 401, "Unauthorized");
           return;
         }
+        log.debug("accepting CDP client WebSocket upgrade");
         // Allow CDP clients to connect even during brief extension worker drops.
         // Individual commands already wait briefly for extension reconnect.
         wssCdp.handleUpgrade(req, socket, head, (ws) => {
@@ -764,6 +805,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
     });
 
     wssExtension.on("connection", (ws) => {
+      log.info("extension WebSocket connected");
       extensionWs = ws;
       clearExtensionDisconnectCleanupTimer();
       flushExtensionReconnectWaiters(true);
@@ -825,6 +867,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
             const attached = (params ?? {}) as AttachedToTargetEvent;
             const targetType = attached?.targetInfo?.type ?? "page";
             if (targetType !== "page") {
+              log.debug(
+                `ignoring Target.attachedToTarget for non-page type=${targetType} targetId=${attached?.targetInfo?.targetId}`,
+              );
               return;
             }
             if (attached?.sessionId && attached?.targetInfo?.targetId) {
@@ -832,6 +877,10 @@ export async function ensureChromeExtensionRelayServer(opts: {
               const nextTargetId = attached.targetInfo.targetId;
               const prevTargetId = prev?.targetId;
               const changedTarget = Boolean(prev && prevTargetId && prevTargetId !== nextTargetId);
+              log.info(
+                `Target.attachedToTarget: sessionId=${attached.sessionId} targetId=${nextTargetId}${changedTarget ? ` (replaced targetId=${prevTargetId})` : prev ? " (duplicate, no change)" : " (new)"}` +
+                  ` url=${attached.targetInfo.url ?? "(none)"} (total=${connectedTargets.size + (prev ? 0 : 1)})`,
+              );
               connectedTargets.set(attached.sessionId, {
                 sessionId: attached.sessionId,
                 targetId: nextTargetId,
@@ -853,6 +902,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
 
           if (method === "Target.detachedFromTarget") {
             const detached = (params ?? {}) as DetachedFromTargetEvent;
+            log.info(
+              `Target.detachedFromTarget: sessionId=${detached?.sessionId ?? "(none)"} targetId=${detached?.targetId ?? "(none)"}`,
+            );
             if (detached?.sessionId) {
               dropConnectedTargetSession(detached.sessionId);
             } else if (detached?.targetId) {
@@ -864,6 +916,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
 
           if (method === "Target.targetDestroyed" || method === "Target.targetCrashed") {
             const targetEvent = (params ?? {}) as { targetId?: string };
+            log.info(`${method}: targetId=${targetEvent.targetId ?? "(none)"}`);
             if (targetEvent.targetId) {
               dropConnectedTargetsByTargetId(targetEvent.targetId);
             }
@@ -874,19 +927,26 @@ export async function ensureChromeExtensionRelayServer(opts: {
           // Keep cached tab metadata fresh for /json/list.
           // After navigation, Chrome updates URL/title via Target.targetInfoChanged.
           if (method === "Target.targetInfoChanged") {
-            const changed = (params ?? {}) as { targetInfo?: { targetId?: string; type?: string } };
+            const changed = (params ?? {}) as {
+              targetInfo?: { targetId?: string; type?: string; url?: string; title?: string };
+            };
             const targetInfo = changed?.targetInfo;
             const targetId = targetInfo?.targetId;
             if (targetId && (targetInfo?.type ?? "page") === "page") {
+              let matched = false;
               for (const [sid, target] of connectedTargets) {
                 if (target.targetId !== targetId) {
                   continue;
                 }
+                matched = true;
                 connectedTargets.set(sid, {
                   ...target,
                   targetInfo: { ...target.targetInfo, ...(targetInfo as object) },
                 });
               }
+              log.debug(
+                `Target.targetInfoChanged: targetId=${targetId} matched=${matched} url=${targetInfo?.url ?? "(none)"}`,
+              );
             }
           }
 
@@ -894,9 +954,13 @@ export async function ensureChromeExtensionRelayServer(opts: {
         }
       });
 
-      ws.on("close", () => {
+      ws.on("close", (code, reason) => {
+        log.info(
+          `extension WebSocket disconnected: code=${code} reason=${reason?.toString() || "(none)"} pendingCommands=${pendingExtension.size}`,
+        );
         clearInterval(ping);
         if (extensionWs !== ws) {
+          log.debug("ignoring close from stale extension WebSocket reference");
           return;
         }
         extensionWs = null;
@@ -911,6 +975,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
 
     wssCdp.on("connection", (ws) => {
       cdpClients.add(ws);
+      log.info(`CDP client connected (total=${cdpClients.size})`);
 
       ws.on("message", async (data) => {
         let cmd: CdpCommand | null = null;
@@ -927,8 +992,14 @@ export async function ensureChromeExtensionRelayServer(opts: {
         }
 
         if (!extensionConnected()) {
+          log.debug(
+            `extension not connected for CDP command ${cmd.method}, waiting ${extensionCommandReconnectWaitMs}ms for reconnect`,
+          );
           const reconnected = await waitForExtensionReconnect(extensionCommandReconnectWaitMs);
           if (!reconnected || !extensionConnected()) {
+            log.warn(
+              `extension reconnect failed for CDP command ${cmd.method}, returning error to client`,
+            );
             sendResponseToCdp(ws, {
               id: cmd.id,
               sessionId: cmd.sessionId,
@@ -936,6 +1007,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
             });
             return;
           }
+          log.debug(`extension reconnected, proceeding with command ${cmd.method}`);
         }
 
         try {
@@ -974,6 +1046,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
 
           sendResponseToCdp(ws, { id: cmd.id, sessionId: cmd.sessionId, result });
         } catch (err) {
+          log.warn(
+            `CDP command failed: method=${cmd.method} error=${err instanceof Error ? err.message : String(err)}`,
+          );
           pruneStaleTargetsFromCommandFailure(cmd, err);
           sendResponseToCdp(ws, {
             id: cmd.id,
@@ -985,6 +1060,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
 
       ws.on("close", () => {
         cdpClients.delete(ws);
+        log.info(`CDP client disconnected (remaining=${cdpClients.size})`);
       });
     });
 
@@ -1002,6 +1078,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
           relayAuthToken,
         }))
       ) {
+        log.info(
+          `port ${info.port} already in use by authenticated openclaw relay, reusing existing server`,
+        );
         const existingRelay: ChromeExtensionRelayServer = {
           host: info.host,
           bindHost,
@@ -1025,6 +1104,8 @@ export async function ensureChromeExtensionRelayServer(opts: {
     const host = info.host;
     const baseUrl = `${new URL(info.baseUrl).protocol}//${host}:${port}`;
 
+    log.info(`relay server listening on ${baseUrl}`);
+
     const relay: ChromeExtensionRelayServer = {
       host,
       bindHost: actualBindHost,
@@ -1033,6 +1114,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
       cdpWsUrl: `ws://${host}:${port}/cdp`,
       extensionConnected,
       stop: async () => {
+        log.info(`stopping relay server on port ${port}`);
         relayRuntimeByPort.delete(port);
         clearExtensionDisconnectCleanupTimer();
         flushExtensionReconnectWaiters(false);

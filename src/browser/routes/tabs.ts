@@ -1,7 +1,10 @@
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { BrowserProfileUnavailableError, BrowserTabNotFoundError } from "../errors.js";
 import type { BrowserRouteContext, ProfileContext } from "../server-context.js";
 import type { BrowserRequest, BrowserResponse, BrowserRouteRegistrar } from "./types.js";
 import { getProfileContext, jsonError, toNumber, toStringOrEmpty } from "./utils.js";
+
+const log = createSubsystemLogger("browser/tabs");
 
 function resolveTabsProfileContext(
   req: BrowserRequest,
@@ -25,9 +28,11 @@ function handleTabsRouteError(
   if (opts?.mapTabError) {
     const mapped = ctx.mapTabError(err);
     if (mapped) {
+      log.warn(`tab route error (${mapped.status}): ${mapped.message}`);
       return jsonError(res, mapped.status, mapped.message);
     }
   }
+  log.error(`tab route error: ${String(err)}`);
   return jsonError(res, 500, String(err));
 }
 
@@ -108,9 +113,11 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
       run: async (profileCtx) => {
         const reachable = await profileCtx.isReachable(300);
         if (!reachable) {
+          log.debug("GET /tabs: browser not reachable, returning empty");
           return res.json({ running: false, tabs: [] as unknown[] });
         }
         const tabs = await profileCtx.listTabs();
+        log.info(`GET /tabs: ${tabs.length} tabs returned`);
         res.json({ running: true, tabs });
       },
     });
@@ -119,9 +126,11 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
   app.post("/tabs/open", async (req, res) => {
     const url = toStringOrEmpty((req.body as { url?: unknown })?.url);
     if (!url) {
+      log.warn("POST /tabs/open: missing url");
       return jsonError(res, 400, "url is required");
     }
 
+    log.info(`POST /tabs/open: opening ${url}`);
     await withTabsProfileRoute({
       req,
       res,
@@ -130,6 +139,7 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
       run: async (profileCtx) => {
         await profileCtx.ensureBrowserAvailable();
         const tab = await profileCtx.openTab(url);
+        log.debug(`POST /tabs/open: opened tab ${tab.targetId}`);
         res.json(tab);
       },
     });
@@ -140,6 +150,7 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
     if (!targetId) {
       return;
     }
+    log.info(`POST /tabs/focus: targetId=${targetId}`);
     await runTabTargetMutation({
       req,
       res,
@@ -156,6 +167,7 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
     if (!targetId) {
       return;
     }
+    log.info(`DELETE /tabs/${targetId}`);
     await runTabTargetMutation({
       req,
       res,
@@ -180,13 +192,16 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
         if (action === "list") {
           const reachable = await profileCtx.isReachable(300);
           if (!reachable) {
+            log.debug("POST /tabs/action list: browser not reachable");
             return res.json({ ok: true, tabs: [] as unknown[] });
           }
           const tabs = await profileCtx.listTabs();
+          log.info(`POST /tabs/action list: ${tabs.length} tabs`);
           return res.json({ ok: true, tabs });
         }
 
         if (action === "new") {
+          log.info("POST /tabs/action new: opening blank tab");
           await profileCtx.ensureBrowserAvailable();
           const tab = await profileCtx.openTab("about:blank");
           return res.json({ ok: true, tab });
@@ -196,8 +211,10 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
           const tabs = await profileCtx.listTabs();
           const target = resolveIndexedTab(tabs, index);
           if (!target) {
+            log.warn(`POST /tabs/action close: tab not found at index=${index}`);
             throw new BrowserTabNotFoundError();
           }
+          log.info(`POST /tabs/action close: closing tab ${target.targetId}`);
           await profileCtx.closeTab(target.targetId);
           return res.json({ ok: true, targetId: target.targetId });
         }
@@ -209,12 +226,15 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
           const tabs = await profileCtx.listTabs();
           const target = tabs[index];
           if (!target) {
+            log.warn(`POST /tabs/action select: tab not found at index=${index}`);
             throw new BrowserTabNotFoundError();
           }
+          log.info(`POST /tabs/action select: focusing tab ${target.targetId}`);
           await profileCtx.focusTab(target.targetId);
           return res.json({ ok: true, targetId: target.targetId });
         }
 
+        log.warn(`POST /tabs/action: unknown action "${action}"`);
         return jsonError(res, 400, "unknown tab action");
       },
     });

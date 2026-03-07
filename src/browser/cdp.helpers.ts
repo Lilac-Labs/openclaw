@@ -1,9 +1,12 @@
 import WebSocket from "ws";
 import { isLoopbackHost } from "../gateway/net.js";
 import { rawDataToString } from "../infra/ws.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getDirectAgentForCdp, withNoProxyForCdpUrl } from "./cdp-proxy-bypass.js";
 import { CDP_HTTP_REQUEST_TIMEOUT_MS, CDP_WS_HANDSHAKE_TIMEOUT_MS } from "./cdp-timeouts.js";
 import { getChromeExtensionRelayAuthHeaders } from "./extension-relay.js";
+
+const log = createSubsystemLogger("browser/cdp");
 
 export { isLoopbackHost };
 
@@ -47,9 +50,11 @@ export function getHeadersWithAuth(url: string, headers: Record<string, string> 
       (key) => key.toLowerCase() === "authorization",
     );
     if (hasAuthHeader) {
+      log.debug(`getHeadersWithAuth: using existing Authorization header for ${parsed.hostname}`);
       return mergedHeaders;
     }
     if (parsed.username || parsed.password) {
+      log.debug(`getHeadersWithAuth: applying Basic auth for ${parsed.hostname}`);
       const auth = Buffer.from(`${parsed.username}:${parsed.password}`).toString("base64");
       return { ...mergedHeaders, Authorization: `Basic ${auth}` };
     }
@@ -100,6 +105,7 @@ function createCdpSender(ws: WebSocket) {
   ) => {
     const id = nextId++;
     const msg = { id, method, params, sessionId };
+    log.debug(`CDP send id=${id} method=${method}${sessionId ? ` session=${sessionId}` : ""}`);
     ws.send(JSON.stringify(msg));
     return new Promise<unknown>((resolve, reject) => {
       pending.set(id, { resolve, reject });
@@ -107,6 +113,7 @@ function createCdpSender(ws: WebSocket) {
   };
 
   const closeWithError = (err: Error) => {
+    log.warn(`CDP closeWithError: ${err.message}, pending=${pending.size}`);
     for (const [, p] of pending) {
       p.reject(err);
     }
@@ -119,6 +126,7 @@ function createCdpSender(ws: WebSocket) {
   };
 
   ws.on("error", (err) => {
+    log.error(`CDP WebSocket error: ${err instanceof Error ? err.message : String(err)}`);
     closeWithError(err instanceof Error ? err : new Error(String(err)));
   });
 
@@ -130,13 +138,16 @@ function createCdpSender(ws: WebSocket) {
       }
       const p = pending.get(parsed.id);
       if (!p) {
+        log.debug(`CDP response id=${parsed.id} has no pending handler`);
         return;
       }
       pending.delete(parsed.id);
       if (parsed.error?.message) {
+        log.warn(`CDP error response id=${parsed.id}: ${parsed.error.message}`);
         p.reject(new Error(parsed.error.message));
         return;
       }
+      log.debug(`CDP response id=${parsed.id} resolved`);
       p.resolve(parsed.result);
     } catch {
       // ignore
@@ -144,6 +155,7 @@ function createCdpSender(ws: WebSocket) {
   });
 
   ws.on("close", () => {
+    log.debug("CDP WebSocket closed");
     closeWithError(new Error("CDP socket closed"));
   });
 
@@ -164,6 +176,7 @@ export async function fetchCdpChecked(
   timeoutMs = CDP_HTTP_REQUEST_TIMEOUT_MS,
   init?: RequestInit,
 ): Promise<Response> {
+  log.debug(`fetchCdpChecked: ${init?.method ?? "GET"} ${url} timeout=${timeoutMs}ms`);
   const ctrl = new AbortController();
   const t = setTimeout(ctrl.abort.bind(ctrl), timeoutMs);
   try {
@@ -172,8 +185,10 @@ export async function fetchCdpChecked(
       fetch(url, { ...init, headers, signal: ctrl.signal }),
     );
     if (!res.ok) {
+      log.error(`fetchCdpChecked: HTTP ${res.status} for ${url}`);
       throw new Error(`HTTP ${res.status}`);
     }
+    log.debug(`fetchCdpChecked: HTTP ${res.status} OK for ${url}`);
     return res;
   } finally {
     clearTimeout(t);
@@ -192,17 +207,20 @@ export function openCdpWebSocket(
   wsUrl: string,
   opts?: { headers?: Record<string, string>; handshakeTimeoutMs?: number },
 ): WebSocket {
+  log.debug(`openCdpWebSocket: connecting to ${wsUrl}`);
   const headers = getHeadersWithAuth(wsUrl, opts?.headers ?? {});
   const handshakeTimeoutMs =
     typeof opts?.handshakeTimeoutMs === "number" && Number.isFinite(opts.handshakeTimeoutMs)
       ? Math.max(1, Math.floor(opts.handshakeTimeoutMs))
       : CDP_WS_HANDSHAKE_TIMEOUT_MS;
   const agent = getDirectAgentForCdp(wsUrl);
-  return new WebSocket(wsUrl, {
+  const ws = new WebSocket(wsUrl, {
     handshakeTimeout: handshakeTimeoutMs,
     ...(Object.keys(headers).length ? { headers } : {}),
     ...(agent ? { agent } : {}),
   });
+  ws.once("open", () => log.debug(`openCdpWebSocket: connected to ${wsUrl}`));
+  return ws;
 }
 
 export async function withCdpSocket<T>(
@@ -210,6 +228,7 @@ export async function withCdpSocket<T>(
   fn: (send: CdpSendFn) => Promise<T>,
   opts?: { headers?: Record<string, string>; handshakeTimeoutMs?: number },
 ): Promise<T> {
+  log.debug(`withCdpSocket: opening session to ${wsUrl}`);
   const ws = openCdpWebSocket(wsUrl, opts);
   const { send, closeWithError } = createCdpSender(ws);
 
@@ -222,13 +241,21 @@ export async function withCdpSocket<T>(
   try {
     await openPromise;
   } catch (err) {
+    log.error(
+      `withCdpSocket: failed to open connection to ${wsUrl}: ${err instanceof Error ? err.message : String(err)}`,
+    );
     closeWithError(err instanceof Error ? err : new Error(String(err)));
     throw err;
   }
 
   try {
-    return await fn(send);
+    const result = await fn(send);
+    log.debug(`withCdpSocket: session completed successfully for ${wsUrl}`);
+    return result;
   } catch (err) {
+    log.error(
+      `withCdpSocket: session failed for ${wsUrl}: ${err instanceof Error ? err.message : String(err)}`,
+    );
     closeWithError(err instanceof Error ? err : new Error(String(err)));
     throw err;
   } finally {
