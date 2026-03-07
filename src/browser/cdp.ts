@@ -1,6 +1,9 @@
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { appendCdpPath, fetchJson, isLoopbackHost, withCdpSocket } from "./cdp.helpers.js";
 import { assertBrowserNavigationAllowed, withBrowserNavigationPolicy } from "./navigation-guard.js";
+
+const log = createSubsystemLogger("browser/cdp");
 
 export { appendCdpPath, fetchJson, fetchOk, getHeadersWithAuth } from "./cdp.helpers.js";
 
@@ -47,6 +50,9 @@ export async function captureScreenshot(opts: {
   format?: "png" | "jpeg";
   quality?: number; // jpeg only (0..100)
 }): Promise<Buffer> {
+  const format = opts.format ?? "png";
+  log.info(`captureScreenshot: format=${format} fullPage=${!!opts.fullPage}`);
+  const start = Date.now();
   return await withCdpSocket(opts.wsUrl, async (send) => {
     await send("Page.enable");
 
@@ -61,10 +67,10 @@ export async function captureScreenshot(opts: {
       const height = Number(size?.height ?? 0);
       if (width > 0 && height > 0) {
         clip = { x: 0, y: 0, width, height, scale: 1 };
+        log.debug(`captureScreenshot: fullPage clip ${width}x${height}`);
       }
     }
 
-    const format = opts.format ?? "png";
     const quality =
       format === "jpeg" ? Math.max(0, Math.min(100, Math.round(opts.quality ?? 85))) : undefined;
 
@@ -78,9 +84,12 @@ export async function captureScreenshot(opts: {
 
     const base64 = result?.data;
     if (!base64) {
+      log.error("captureScreenshot: missing data in response");
       throw new Error("Screenshot failed: missing data");
     }
-    return Buffer.from(base64, "base64");
+    const buf = Buffer.from(base64, "base64");
+    log.info(`captureScreenshot: success, ${buf.length} bytes in ${Date.now() - start}ms`);
+    return buf;
   });
 }
 
@@ -89,6 +98,7 @@ export async function createTargetViaCdp(opts: {
   url: string;
   ssrfPolicy?: SsrFPolicy;
 }): Promise<{ targetId: string }> {
+  log.info(`createTargetViaCdp: url=${opts.url}`);
   await assertBrowserNavigationAllowed({
     url: opts.url,
     ...withBrowserNavigationPolicy(opts.ssrfPolicy),
@@ -101,6 +111,7 @@ export async function createTargetViaCdp(opts: {
   const wsUrlRaw = String(version?.webSocketDebuggerUrl ?? "").trim();
   const wsUrl = wsUrlRaw ? normalizeCdpWsUrl(wsUrlRaw, opts.cdpUrl) : "";
   if (!wsUrl) {
+    log.error("createTargetViaCdp: /json/version missing webSocketDebuggerUrl");
     throw new Error("CDP /json/version missing webSocketDebuggerUrl");
   }
 
@@ -110,8 +121,10 @@ export async function createTargetViaCdp(opts: {
     };
     const targetId = String(created?.targetId ?? "").trim();
     if (!targetId) {
+      log.error("createTargetViaCdp: Target.createTarget returned no targetId");
       throw new Error("CDP Target.createTarget returned no targetId");
     }
+    log.info(`createTargetViaCdp: created targetId=${targetId}`);
     return { targetId };
   });
 }
@@ -142,6 +155,10 @@ export async function evaluateJavaScript(opts: {
   result: CdpRemoteObject;
   exceptionDetails?: CdpExceptionDetails;
 }> {
+  log.debug(
+    `evaluateJavaScript: expression length=${opts.expression.length} awaitPromise=${!!opts.awaitPromise}`,
+  );
+  const start = Date.now();
   return await withCdpSocket(opts.wsUrl, async (send) => {
     await send("Runtime.enable").catch(() => {});
     const evaluated = (await send("Runtime.evaluate", {
@@ -157,8 +174,13 @@ export async function evaluateJavaScript(opts: {
 
     const result = evaluated?.result;
     if (!result) {
+      log.error("evaluateJavaScript: Runtime.evaluate returned no result");
       throw new Error("CDP Runtime.evaluate returned no result");
     }
+    if (evaluated.exceptionDetails) {
+      log.warn(`evaluateJavaScript: exception: ${evaluated.exceptionDetails.text ?? "unknown"}`);
+    }
+    log.debug(`evaluateJavaScript: completed in ${Date.now() - start}ms, type=${result.type}`);
     return { result, exceptionDetails: evaluated.exceptionDetails };
   });
 }
@@ -261,13 +283,19 @@ export async function snapshotAria(opts: {
   limit?: number;
 }): Promise<{ nodes: AriaSnapshotNode[] }> {
   const limit = Math.max(1, Math.min(2000, Math.floor(opts.limit ?? 500)));
+  log.debug(`snapshotAria: limit=${limit}`);
+  const start = Date.now();
   return await withCdpSocket(opts.wsUrl, async (send) => {
     await send("Accessibility.enable").catch(() => {});
     const res = (await send("Accessibility.getFullAXTree")) as {
       nodes?: RawAXNode[];
     };
     const nodes = Array.isArray(res?.nodes) ? res.nodes : [];
-    return { nodes: formatAriaSnapshot(nodes, limit) };
+    const formatted = formatAriaSnapshot(nodes, limit);
+    log.debug(
+      `snapshotAria: ${nodes.length} raw nodes → ${formatted.length} formatted in ${Date.now() - start}ms`,
+    );
+    return { nodes: formatted };
   });
 }
 
@@ -280,6 +308,8 @@ export async function snapshotDom(opts: {
 }> {
   const limit = Math.max(1, Math.min(5000, Math.floor(opts.limit ?? 800)));
   const maxTextChars = Math.max(0, Math.min(5000, Math.floor(opts.maxTextChars ?? 220)));
+  log.debug(`snapshotDom: limit=${limit} maxTextChars=${maxTextChars}`);
+  const start = Date.now();
 
   const expression = `(() => {
     const maxNodes = ${JSON.stringify(limit)};
@@ -337,7 +367,9 @@ export async function snapshotDom(opts: {
     return { nodes: [] };
   }
   const nodes = (value as { nodes?: unknown }).nodes;
-  return { nodes: Array.isArray(nodes) ? (nodes as DomSnapshotNode[]) : [] };
+  const resultNodes = Array.isArray(nodes) ? (nodes as DomSnapshotNode[]) : [];
+  log.debug(`snapshotDom: ${resultNodes.length} nodes in ${Date.now() - start}ms`);
+  return { nodes: resultNodes };
 }
 
 export type DomSnapshotNode = {
@@ -361,6 +393,10 @@ export async function getDomText(opts: {
   maxChars?: number;
   selector?: string;
 }): Promise<{ text: string }> {
+  log.debug(
+    `getDomText: format=${opts.format} selector=${opts.selector ?? "(none)"} maxChars=${opts.maxChars ?? 200_000}`,
+  );
+  const start = Date.now();
   const maxChars = Math.max(0, Math.min(5_000_000, Math.floor(opts.maxChars ?? 200_000)));
   const selectorExpr = opts.selector ? JSON.stringify(opts.selector) : "null";
   const expression = `(() => {
@@ -393,6 +429,7 @@ export async function getDomText(opts: {
       : typeof textValue === "number" || typeof textValue === "boolean"
         ? String(textValue)
         : "";
+  log.debug(`getDomText: ${text.length} chars in ${Date.now() - start}ms`);
   return { text };
 }
 
@@ -405,6 +442,8 @@ export async function querySelector(opts: {
 }): Promise<{
   matches: QueryMatch[];
 }> {
+  log.debug(`querySelector: selector=${opts.selector} limit=${opts.limit ?? 20}`);
+  const start = Date.now();
   const limit = Math.max(1, Math.min(200, Math.floor(opts.limit ?? 20)));
   const maxText = Math.max(0, Math.min(5000, Math.floor(opts.maxTextChars ?? 500)));
   const maxHtml = Math.max(0, Math.min(20000, Math.floor(opts.maxHtmlChars ?? 1500)));
@@ -447,7 +486,9 @@ export async function querySelector(opts: {
     returnByValue: true,
   });
   const matches = evaluated.result?.value;
-  return { matches: Array.isArray(matches) ? (matches as QueryMatch[]) : [] };
+  const resultMatches = Array.isArray(matches) ? (matches as QueryMatch[]) : [];
+  log.debug(`querySelector: ${resultMatches.length} matches in ${Date.now() - start}ms`);
+  return { matches: resultMatches };
 }
 
 export type QueryMatch = {

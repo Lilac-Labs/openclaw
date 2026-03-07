@@ -1,7 +1,10 @@
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { escapeRegExp } from "../../utils.js";
 import type { BrowserRouteContext } from "../server-context.js";
 import { registerBrowserRoutes } from "./index.js";
 import type { BrowserRequest, BrowserResponse, BrowserRouteRegistrar } from "./types.js";
+
+const log = createSubsystemLogger("browser/dispatcher");
 
 type BrowserDispatchRequest = {
   method: "GET" | "POST" | "DELETE";
@@ -71,6 +74,7 @@ export function createBrowserRouteDispatcher(ctx: BrowserRouteContext) {
       const body = req.body;
       const signal = req.signal;
 
+      log.debug(`dispatch ${method} ${path}`);
       const match = registry.routes.find((route) => {
         if (route.method !== method) {
           return false;
@@ -78,6 +82,7 @@ export function createBrowserRouteDispatcher(ctx: BrowserRouteContext) {
         return route.regex.test(path);
       });
       if (!match) {
+        log.warn(`no route matched: ${method} ${path}`);
         return { status: 404, body: { error: "Not Found" } };
       }
 
@@ -90,6 +95,7 @@ export function createBrowserRouteDispatcher(ctx: BrowserRouteContext) {
             try {
               params[name] = decodeURIComponent(value);
             } catch {
+              log.warn(`invalid path parameter encoding: ${name} in ${path}`);
               return {
                 status: 400,
                 body: { error: `invalid path parameter encoding: ${name}` },
@@ -122,9 +128,11 @@ export function createBrowserRouteDispatcher(ctx: BrowserRouteContext) {
           res,
         );
       } catch (err) {
+        log.error(`handler error for ${method} ${path}: ${String(err)}`);
         return { status: 500, body: { error: String(err) } };
       }
 
+      log.debug(`dispatch ${method} ${path} -> ${status}`);
       return { status, body: payload };
     },
   };
