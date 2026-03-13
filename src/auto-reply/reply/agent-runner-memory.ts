@@ -35,6 +35,7 @@ import {
 import {
   hasAlreadyFlushedForCurrentCompaction,
   resolveMemoryFlushContextWindowTokens,
+  resolveMemoryFlushRelativePathForRun,
   resolveMemoryFlushPromptForRun,
   resolveMemoryFlushSettings,
   shouldRunDailyMemoryCheckpoint, // [lilac]
@@ -479,6 +480,11 @@ export async function runMemoryFlushIfNeeded(params: {
     });
   }
   let memoryCompactionCompleted = false;
+  const memoryFlushNowMs = Date.now();
+  const memoryFlushWritePath = resolveMemoryFlushRelativePathForRun({
+    cfg: params.cfg,
+    nowMs: memoryFlushNowMs,
+  });
   const flushSystemPrompt = [
     params.followupRun.run.extraSystemPrompt,
     memoryFlushSettings.systemPrompt,
@@ -488,6 +494,7 @@ export async function runMemoryFlushIfNeeded(params: {
   try {
     await runWithModelFallback({
       ...resolveModelFallbackOptions(params.followupRun.run),
+      runId: flushRunId,
       run: async (provider, model, runOptions) => {
         const { authProfile, embeddedContext, senderContext } = buildEmbeddedRunContexts({
           run: params.followupRun.run,
@@ -508,12 +515,14 @@ export async function runMemoryFlushIfNeeded(params: {
           ...senderContext,
           ...runBaseParams,
           trigger: "memory",
+          memoryFlushWritePath,
           // [lilac-start] augment prompt for daily checkpoint
           prompt: resolveMemoryFlushPromptForRun({
             prompt: dailyCheckpointNeeded
               ? `<openclaw:daily-checkpoint>${memoryFlushSettings.prompt}</openclaw:daily-checkpoint>`
               : `<openclaw:pre-compaction>${memoryFlushSettings.prompt}</openclaw:pre-compaction>`,
             cfg: params.cfg,
+            nowMs: memoryFlushNowMs,
           }),
           // [lilac-end]
           extraSystemPrompt: flushSystemPrompt,
