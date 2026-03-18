@@ -520,11 +520,6 @@ export function attachGatewayWsMessageHandler(params: {
             authOk,
             authMethod,
           });
-          const preserveInsecureLocalControlUiScopes =
-            isControlUi &&
-            controlUiAuthPolicy.allowInsecureAuthConfigured &&
-            isLocalClient &&
-            (authMethod === "token" || authMethod === "password");
           const decision = evaluateMissingDeviceIdentity({
             hasDeviceIdentity: Boolean(device),
             role,
@@ -536,15 +531,11 @@ export function attachGatewayWsMessageHandler(params: {
             hasSharedAuth,
             isLocalClient,
           });
-          // Shared token/password auth can bypass pairing for trusted operators.
-          // Device-less clients only keep self-declared scopes on the explicit
-          // allow path, including trusted token-authenticated backend operators.
-          if (
-            !device &&
-            (decision.kind !== "allow" ||
-              (!preserveInsecureLocalControlUiScopes &&
-                (authMethod === "token" || authMethod === "password" || trustedProxyAuthOk)))
-          ) {
+          // [lilac] Device-less clients that were not authorized (decision !== "allow") must
+          // not retain self-declared scopes. Authorized device-less clients — whether
+          // Control UI or operator-role CLI clients authenticated via shared
+          // token/password — keep their requested scopes.
+          if (!device && decision.kind !== "allow") {
             clearUnboundScopes();
           }
           if (decision.kind === "allow") {
