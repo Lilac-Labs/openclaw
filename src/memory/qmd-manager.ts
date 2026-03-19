@@ -1269,12 +1269,33 @@ export class QmdMemoryManager implements MemorySearchManager {
     minScore: number;
     collection?: string;
     timeoutMs: number;
+    skipDaemonStart?: boolean;
   }): Promise<QmdQueryResult[]> {
-    await this.ensureMcporterDaemonStarted(params.mcporter);
+    if (!params.skipDaemonStart) {
+      await this.ensureMcporterDaemonStarted(params.mcporter);
+    }
 
-    const selector = `${params.mcporter.serverName}.${params.tool}`;
+    // QMD's MCP server exposes a single `query` tool that accepts a `searches`
+    // array with typed sub-queries.  Map the legacy tool names to the
+    // appropriate search types so the call succeeds.
+    const searchTypeMap: Record<string, string> = {
+      search: "lex",
+      vector_search: "vec",
+      // deep_search → hybrid lex+vec for best recall
+      deep_search: "lex",
+    };
+
+    const selector = `${params.mcporter.serverName}.query`;
+    const searches: Array<{ type: string; query: string }> =
+      params.tool === "deep_search"
+        ? [
+            { type: "lex", query: params.query },
+            { type: "vec", query: params.query },
+          ]
+        : [{ type: searchTypeMap[params.tool] ?? "lex", query: params.query }];
+
     const callArgs: Record<string, unknown> = {
-      query: params.query,
+      searches,
       limit: params.limit,
       minScore: params.minScore,
     };
@@ -2003,6 +2024,9 @@ export class QmdMemoryManager implements MemorySearchManager {
     minScore: number;
     collectionNames: string[];
   }): Promise<QmdQueryResult[]> {
+    // Start the daemon once before iterating collections, not per-collection.
+    await this.ensureMcporterDaemonStarted(this.qmd.mcporter);
+
     const bestByDocId = new Map<string, QmdQueryResult>();
     for (const collectionName of params.collectionNames) {
       const parsed = await this.runQmdSearchViaMcporter({
@@ -2013,6 +2037,7 @@ export class QmdMemoryManager implements MemorySearchManager {
         minScore: params.minScore,
         collection: collectionName,
         timeoutMs: this.qmd.limits.timeoutMs,
+        skipDaemonStart: true,
       });
       for (const entry of parsed) {
         if (typeof entry.docid !== "string" || !entry.docid.trim()) {
