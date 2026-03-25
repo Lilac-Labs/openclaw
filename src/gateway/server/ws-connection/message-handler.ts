@@ -531,7 +531,7 @@ export function attachGatewayWsMessageHandler(params: {
             hasSharedAuth,
             isLocalClient,
           });
-          // Device-less clients that were not authorized (decision !== "allow") must
+          // [lilac] Device-less clients that were not authorized (decision !== "allow") must
           // not retain self-declared scopes. Authorized device-less clients — whether
           // Control UI or operator-role CLI clients authenticated via shared
           // token/password — keep their requested scopes.
@@ -682,7 +682,13 @@ export function attachGatewayWsMessageHandler(params: {
             hasBrowserOriginHeader,
             sharedAuthOk,
             authMethod,
-          }) || shouldSkipControlUiPairing(controlUiAuthPolicy, role, trustedProxyAuthOk);
+          }) ||
+          shouldSkipControlUiPairing(
+            controlUiAuthPolicy,
+            role,
+            trustedProxyAuthOk,
+            resolvedAuth.mode,
+          );
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {
             if (!items || items.length === 0) {

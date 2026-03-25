@@ -9,7 +9,6 @@ import type {
 import { chromium } from "playwright-core";
 import { formatErrorMessage } from "../infra/errors.js";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
-import { createSubsystemLogger } from "../logging/subsystem.js";
 import { withNoProxyForCdpUrl } from "./cdp-proxy-bypass.js";
 import {
   appendCdpPath,
@@ -21,15 +20,13 @@ import {
 import { normalizeCdpWsUrl } from "./cdp.js";
 import { getChromeWebSocketUrl } from "./chrome.js";
 import { BrowserTabNotFoundError } from "./errors.js";
-
-const log = createSubsystemLogger("browser").child("pw-session");
 import {
   assertBrowserNavigationAllowed,
   assertBrowserNavigationRedirectChainAllowed,
   assertBrowserNavigationResultAllowed,
   withBrowserNavigationPolicy,
 } from "./navigation-guard.js";
-import { isExtensionRelayCdpEndpoint, withPageScopedCdpClient } from "./pw-session.page-cdp.js";
+import { withPageScopedCdpClient } from "./pw-session.page-cdp.js";
 
 export type BrowserConsoleMessage = {
   type: string;
@@ -457,28 +454,6 @@ async function findPageByTargetId(
   cdpUrl?: string,
 ): Promise<Page | null> {
   const pages = await getAllPages(browser);
-  log.info(`findPageByTargetId: entry`, {
-    targetId,
-    pageCount: pages.length,
-    pageUrls: pages.map((p) => p.url()),
-  });
-  const isExtensionRelay = cdpUrl
-    ? await isExtensionRelayCdpEndpoint(cdpUrl).catch(() => false)
-    : false;
-  if (cdpUrl && isExtensionRelay) {
-    try {
-      const matched = await findPageByTargetIdViaTargetList(pages, targetId, cdpUrl);
-      if (matched) {
-        log.info(`findPageByTargetId: matched via target list`, { targetId });
-        return matched;
-      }
-    } catch {
-      // Ignore fetch errors and fall through to best-effort single-page fallback.
-    }
-    log.info(`findPageByTargetId: extension relay fallback`, { singlePage: pages.length === 1 });
-    return pages.length === 1 ? (pages[0] ?? null) : null;
-  }
-
   let resolvedViaCdp = false;
   for (const page of pages) {
     let tid: string | null = null;
@@ -489,126 +464,19 @@ async function findPageByTargetId(
       tid = null;
     }
     if (tid && tid === targetId) {
-      log.info(`findPageByTargetId: matched via CDP session`, { targetId, url: page.url() });
       return page;
     }
   }
-  if (!resolvedViaCdp && pages.length === 1) {
-    log.info(`findPageByTargetId: CDP blocked, single-page fallback`, {
-      targetId,
-      url: pages[0].url(),
-    });
-    return pages[0];
-  }
-  if (!resolvedViaCdp) {
-    log.warn(
-      `findPageByTargetId: CDP session resolution failed for all ${pages.length} pages, trying URL-based fallback`,
-      { targetId },
-    );
-  }
   if (cdpUrl) {
     try {
-      const baseUrl = cdpUrl
-        .replace(/\/+$/, "")
-        .replace(/^ws:/, "http:")
-        .replace(/\/cdp$/, "");
-      const listUrl = `${baseUrl}/json/list`;
-      const response = await fetch(listUrl, { headers: getHeadersWithAuth(listUrl) });
-      if (response.ok) {
-        const targets = (await response.json()) as Array<{
-          id: string;
-          url: string;
-          title?: string;
-        }>;
-        log.info(`findPageByTargetId: /json/list returned ${targets.length} targets`, {
-          targetId,
-          targetIds: targets.map((t) => t.id),
-        });
-        const target = targets.find((t) => t.id === targetId);
-        if (target) {
-          log.info(`findPageByTargetId: found target in /json/list`, {
-            targetId,
-            targetUrl: target.url,
-          });
-          // Try to find a page with matching URL
-          const urlMatch = pages.filter((p) => p.url() === target.url);
-          if (urlMatch.length === 1) {
-            log.info(`findPageByTargetId: unique URL match`, { targetId, url: target.url });
-            return urlMatch[0];
-          }
-          // If multiple URL matches, use index-based matching as fallback
-          // This works when Playwright and the relay enumerate tabs in the same order
-          if (urlMatch.length > 1) {
-            const sameUrlTargets = targets.filter((t) => t.url === target.url);
-            if (sameUrlTargets.length === urlMatch.length) {
-              const idx = sameUrlTargets.findIndex((t) => t.id === targetId);
-              if (idx >= 0 && idx < urlMatch.length) {
-                log.info(`findPageByTargetId: index-based URL match`, {
-                  targetId,
-                  url: target.url,
-                  idx,
-                });
-                return urlMatch[idx];
-              }
-            }
-          }
-          // Origin-based fallback: SPA navigations (pushState/replaceState) can change
-          // the page URL without the relay knowing, making the relay URL stale.
-          // Match by origin (protocol+host) when exact URL matching fails.
-          if (urlMatch.length === 0 && target.url) {
-            try {
-              const targetOrigin = new URL(target.url).origin;
-              const originMatch = pages.filter((p) => {
-                try {
-                  return new URL(p.url()).origin === targetOrigin;
-                } catch {
-                  return false;
-                }
-              });
-              if (originMatch.length === 1) {
-                log.info(`findPageByTargetId: unique origin match`, {
-                  targetId,
-                  targetUrl: target.url,
-                  pageUrl: originMatch[0].url(),
-                });
-                return originMatch[0];
-              }
-              if (originMatch.length > 1) {
-                log.warn(`findPageByTargetId: multiple origin matches, cannot disambiguate`, {
-                  targetId,
-                  targetUrl: target.url,
-                  originMatchUrls: originMatch.map((p) => p.url()),
-                });
-              }
-            } catch {
-              // Invalid URL — fall through
-            }
-          }
-          log.warn(
-            `findPageByTargetId: target found in /json/list but no Playwright page matched`,
-            {
-              targetId,
-              targetUrl: target.url,
-              urlMatchCount: urlMatch.length,
-              pageUrls: pages.map((p) => p.url()),
-            },
-          );
-        } else {
-          log.warn(`findPageByTargetId: targetId not in /json/list`, {
-            targetId,
-            availableTargetIds: targets.map((t) => t.id),
-          });
-        }
-      }
+      return await findPageByTargetIdViaTargetList(pages, targetId, cdpUrl);
     } catch {
-      log.warn(`findPageByTargetId: /json/list fallback failed`, { targetId });
+      // Ignore fetch errors and fall through to return null.
     }
   }
-  log.warn(`findPageByTargetId: returning null — no resolution path succeeded`, {
-    targetId,
-    pageCount: pages.length,
-    resolvedViaCdp,
-  });
+  if (!resolvedViaCdp && pages.length === 1) {
+    return pages[0] ?? null;
+  }
   return null;
 }
 
@@ -616,16 +484,11 @@ async function resolvePageByTargetIdOrThrow(opts: {
   cdpUrl: string;
   targetId: string;
 }): Promise<Page> {
-  log.info(`resolvePageByTargetIdOrThrow: entry`, { targetId: opts.targetId, cdpUrl: opts.cdpUrl });
   const { browser } = await connectBrowser(opts.cdpUrl);
   const page = await findPageByTargetId(browser, opts.targetId, opts.cdpUrl);
   if (!page) {
-    log.error(`resolvePageByTargetIdOrThrow: throwing "tab not found"`, {
-      targetId: opts.targetId,
-    });
     throw new BrowserTabNotFoundError();
   }
-  log.info(`resolvePageByTargetIdOrThrow: resolved`, { targetId: opts.targetId, url: page.url() });
   return page;
 }
 
@@ -642,31 +505,14 @@ export async function getPageForTargetId(opts: {
   if (!opts.targetId) {
     return first;
   }
-  log.info(`getPageForTargetId: looking up targetId`, {
-    targetId: opts.targetId,
-    pageCount: pages.length,
-    pageUrls: pages.map((p) => p.url()),
-  });
   const found = await findPageByTargetId(browser, opts.targetId, opts.cdpUrl);
   if (!found) {
-    // Extension relays can block CDP attachment APIs (e.g. Target.attachToBrowserTarget),
-    // which prevents us from resolving a page's targetId via newCDPSession(). If Playwright
-    // only exposes a single Page, use it as a best-effort fallback.
+    // If Playwright only exposes a single Page, use it as a best-effort fallback.
     if (pages.length === 1) {
-      log.info(`getPageForTargetId: single-page fallback`, {
-        targetId: opts.targetId,
-        url: first.url(),
-      });
       return first;
     }
-    log.error(`getPageForTargetId: throwing "tab not found"`, {
-      targetId: opts.targetId,
-      pageCount: pages.length,
-      pageUrls: pages.map((p) => p.url()),
-    });
     throw new BrowserTabNotFoundError();
   }
-  log.info(`getPageForTargetId: resolved`, { targetId: opts.targetId, url: found.url() });
   return found;
 }
 
