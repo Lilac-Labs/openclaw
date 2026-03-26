@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { lookupContextTokens } from "../../agents/context.js";
 import { resolveCronStyleNow } from "../../agents/current-time.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
@@ -169,7 +170,9 @@ export function resolveMemoryFlushContextWindowTokens(params: {
   agentCfgContextTokens?: number;
 }): number {
   return (
-    lookupContextTokens(params.modelId) ?? params.agentCfgContextTokens ?? DEFAULT_CONTEXT_TOKENS
+    lookupContextTokens(params.modelId, { allowAsyncLoad: false }) ??
+    params.agentCfgContextTokens ??
+    DEFAULT_CONTEXT_TOKENS
   );
 }
 
@@ -250,3 +253,20 @@ export function shouldRunDailyMemoryCheckpoint(params: {
   return (params.entry.memoryCheckpointAt ?? 0) < boundary;
 }
 // [lilac-end]
+
+/**
+ * Compute a lightweight content hash from the tail of a session transcript.
+ * Used for state-based flush deduplication — if the hash hasn't changed since
+ * the last flush, the context is effectively the same and flushing again would
+ * produce duplicate memory entries.
+ *
+ * Hash input: `messages.length` + content of the last 3 user/assistant messages.
+ * Algorithm: SHA-256 truncated to 16 hex chars (collision-resistant enough for dedup).
+ */
+export function computeContextHash(messages: Array<{ role?: string; content?: unknown }>): string {
+  const userAssistant = messages.filter((m) => m.role === "user" || m.role === "assistant");
+  const tail = userAssistant.slice(-3);
+  const payload = `${messages.length}:${tail.map((m, i) => `[${i}:${m.role ?? ""}]${typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "")}`).join("\x00")}`;
+  const hash = crypto.createHash("sha256").update(payload).digest("hex");
+  return hash.slice(0, 16);
+}

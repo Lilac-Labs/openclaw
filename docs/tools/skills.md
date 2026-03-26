@@ -47,6 +47,28 @@ You can gate them via `metadata.openclaw.requires.config` on the plugin’s conf
 entry. See [Plugins](/tools/plugin) for discovery/config and [Tools](/tools) for the
 tool surface those skills teach.
 
+## ClawHub (install + sync)
+
+ClawHub is the public skills registry for OpenClaw. Browse at
+[https://clawhub.com](https://clawhub.com). Use native `openclaw skills`
+commands to discover/install/update skills, or the separate `clawhub` CLI when
+you need publish/sync workflows.
+Full guide: [ClawHub](/tools/clawhub).
+
+Common flows:
+
+- Install a skill into your workspace:
+  - `openclaw skills install <skill-slug>`
+- Update all installed skills:
+  - `openclaw skills update --all`
+- Sync (scan + publish updates):
+  - `clawhub sync --all`
+
+Native `openclaw skills install` installs into the active workspace `skills/`
+directory. The separate `clawhub` CLI also installs into `./skills` under your
+current working directory (or falls back to the configured OpenClaw workspace).
+OpenClaw picks that up as `<workspace>/skills` on the next session.
+
 ## Security notes
 
 - Treat third-party skills as **untrusted code**. Read them before enabling.
@@ -62,8 +84,8 @@ tool surface those skills teach.
 
 ```markdown
 ---
-name: nano-banana-pro
-description: Generate or edit images via Gemini 3 Pro Image
+name: image-lab
+description: Generate or edit images via a provider-backed image workflow
 ---
 ```
 
@@ -90,8 +112,8 @@ OpenClaw **filters skills at load time** using `metadata` (single-line JSON):
 
 ```markdown
 ---
-name: nano-banana-pro
-description: Generate or edit images via Gemini 3 Pro Image
+name: image-lab
+description: Generate or edit images via a provider-backed image workflow
 metadata:
   {
     "openclaw":
@@ -175,7 +197,7 @@ Bundled/managed skills can be toggled and supplied with env values:
 {
   skills: {
     entries: {
-      "nano-banana-pro": {
+      "image-lab": {
         enabled: true,
         apiKey: { source: "env", provider: "default", id: "GEMINI_API_KEY" }, // or plaintext string
         env: {
@@ -194,6 +216,16 @@ Bundled/managed skills can be toggled and supplied with env values:
 ```
 
 Note: if the skill name contains hyphens, quote the key (JSON5 allows quoted keys).
+
+If you want stock image generation/editing inside OpenClaw itself, use the core
+`image_generate` tool with `agents.defaults.imageGenerationModel` instead of a
+bundled skill. Skill examples here are for custom or third-party workflows.
+
+For native image analysis, use the `image` tool with `agents.defaults.imageModel`.
+For native image generation/editing, use `image_generate` with
+`agents.defaults.imageGenerationModel`. If you pick `openai/*`, `google/*`,
+`fal/*`, or another provider-specific image model, add that provider's auth/API
+key too.
 
 Config keys match the **skill name** by default. If a skill defines
 `metadata.openclaw.skillKey`, use that key under `skills.entries`.
@@ -275,5 +307,9 @@ copy). Workspace skills are user-owned and override both on name conflicts.
 ## Config reference
 
 See [Skills config](/tools/skills-config) for the full configuration schema.
+
+## Looking for more skills?
+
+Browse [https://clawhub.com](https://clawhub.com).
 
 ---
