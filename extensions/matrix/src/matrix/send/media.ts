@@ -122,10 +122,6 @@ export async function prepareImageInfo(params: {
     return undefined;
   }
   const imageInfo: DimensionalFileInfo = { w: meta.width, h: meta.height };
-  if (params.encrypted) {
-    // For E2EE media, avoid uploading plaintext thumbnails.
-    return imageInfo;
-  }
   const maxDim = Math.max(meta.width, meta.height);
   if (maxDim > THUMBNAIL_MAX_SIDE) {
     try {
