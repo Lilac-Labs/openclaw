@@ -23,8 +23,6 @@ export const updateNpmInstalledHookPacks = vi.fn();
 export const promptYesNo = vi.fn();
 export const installPluginFromNpmSpec = vi.fn();
 export const installPluginFromPath = vi.fn();
-export const installPluginFromClawHub = vi.fn();
-export const parseClawHubPluginSpec = vi.fn();
 export const installHooksFromNpmSpec = vi.fn();
 export const installHooksFromPath = vi.fn();
 export const recordHookInstall = vi.fn();
@@ -114,20 +112,6 @@ vi.mock("../hooks/installs.js", () => ({
   recordHookInstall: (...args: unknown[]) => recordHookInstall(...args),
 }));
 
-vi.mock("../plugins/clawhub.js", () => ({
-  CLAWHUB_INSTALL_ERROR_CODE: {
-    PACKAGE_NOT_FOUND: "package_not_found",
-    VERSION_NOT_FOUND: "version_not_found",
-  },
-  installPluginFromClawHub: (...args: unknown[]) => installPluginFromClawHub(...args),
-  formatClawHubSpecifier: ({ name, version }: { name: string; version?: string }) =>
-    `clawhub:${name}${version ? `@${version}` : ""}`,
-}));
-
-vi.mock("../infra/clawhub.js", () => ({
-  parseClawHubPluginSpec: (...args: unknown[]) => parseClawHubPluginSpec(...args),
-}));
-
 const { registerPluginsCli } = await import("./plugins-cli.js");
 
 export function runPluginsCommand(argv: string[]) {
@@ -157,8 +141,6 @@ export function resetPluginsCliTestState() {
   promptYesNo.mockReset();
   installPluginFromNpmSpec.mockReset();
   installPluginFromPath.mockReset();
-  installPluginFromClawHub.mockReset();
-  parseClawHubPluginSpec.mockReset();
   installHooksFromNpmSpec.mockReset();
   installHooksFromPath.mockReset();
   recordHookInstall.mockReset();
@@ -223,11 +205,6 @@ export function resetPluginsCliTestState() {
     ok: false,
     error: "npm install disabled in test",
   });
-  installPluginFromClawHub.mockResolvedValue({
-    ok: false,
-    error: "clawhub install disabled in test",
-  });
-  parseClawHubPluginSpec.mockReturnValue(null);
   installHooksFromPath.mockResolvedValue({
     ok: false,
     error: "hook path install disabled in test",

@@ -638,7 +638,7 @@ describe("installPluginFromArchive", () => {
     expectSuccessfulArchiveInstall({ result, stateDir, pluginId: "@openclaw/zipper" });
   });
 
-  it("installs flat-root plugin archives from ClawHub-style downloads", async () => {
+  it("installs flat-root plugin archives from registry-style downloads", async () => {
     const result = await installArchivePackageAndReturnResult({
       packageJson: {
         name: "@openclaw/rootless",

@@ -46,16 +46,14 @@ capabilities.
 ### Install
 
 ```bash
-openclaw plugins install <package>                      # ClawHub first, then npm
-openclaw plugins install clawhub:<package>              # ClawHub only
+openclaw plugins install <package>                      # install from npm
 openclaw plugins install <package> --pin                # pin version
 openclaw plugins install <path>                         # local path
 openclaw plugins install <plugin>@<marketplace>         # marketplace
 openclaw plugins install <plugin> --marketplace <name>  # marketplace (explicit)
 ```
 
-Bare package names are checked against ClawHub first, then npm. Security note:
-treat plugin installs like running code. Prefer pinned versions.
+Security note: treat plugin installs like running code. Prefer pinned versions.
 
 `plugins install` is also the install surface for hook packs that expose
 `openclaw.hooks` in `package.json`. Use `openclaw hooks` for filtered hook
@@ -77,25 +75,6 @@ name, use an explicit scoped spec (for example `@scope/diffs`).
 Supported archives: `.zip`, `.tgz`, `.tar.gz`, `.tar`.
 
 Claude marketplace installs are also supported.
-
-ClawHub installs use an explicit `clawhub:<package>` locator:
-
-```bash
-openclaw plugins install clawhub:openclaw-codex-app-server
-openclaw plugins install clawhub:openclaw-codex-app-server@1.2.3
-```
-
-OpenClaw now also prefers ClawHub for bare npm-safe plugin specs. It only falls
-back to npm if ClawHub does not have that package or version:
-
-```bash
-openclaw plugins install openclaw-codex-app-server
-```
-
-OpenClaw downloads the package archive from ClawHub, checks the advertised
-plugin API / minimum gateway compatibility, then installs it through the normal
-archive path. Recorded installs keep their ClawHub source metadata for later
-updates.
 
 Use `plugin@marketplace` shorthand when the marketplace name exists in Claude's
 local registry cache at `~/.claude/plugins/known_marketplaces.json`:

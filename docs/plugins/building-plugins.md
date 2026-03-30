@@ -14,9 +14,8 @@ Plugins extend OpenClaw with new capabilities: channels, model providers, speech
 image generation, web search, agent tools, or any combination.
 
 You do not need to add your plugin to the OpenClaw repository. Publish to
-[ClawHub](/tools/clawhub) or npm and users install with
-`openclaw plugins install <package-name>`. OpenClaw tries ClawHub first and
-falls back to npm automatically.
+npm and users install with
+`openclaw plugins install <package-name>`.
 
 ## Prerequisites
 
@@ -107,13 +106,11 @@ and provider plugins have dedicated guides linked above.
 
   <Step title="Test and publish">
 
-    **External plugins:** publish to [ClawHub](/tools/clawhub) or npm, then install:
+    **External plugins:** publish to npm, then install:
 
     ```bash
     openclaw plugins install @myorg/openclaw-my-plugin
     ```
-
-    OpenClaw checks ClawHub first, then falls back to npm.
 
     **In-repo plugins:** place under `extensions/` — automatically discovered.
 

@@ -94,31 +94,6 @@ function createMarketplaceInstallConfig(params: {
   };
 }
 
-function createClawHubInstallConfig(params: {
-  pluginId: string;
-  installPath: string;
-  clawhubUrl: string;
-  clawhubPackage: string;
-  clawhubFamily: "bundle-plugin" | "code-plugin";
-  clawhubChannel: "community" | "official" | "private";
-}): OpenClawConfig {
-  return {
-    plugins: {
-      installs: {
-        [params.pluginId]: {
-          source: "clawhub" as const,
-          spec: `clawhub:${params.clawhubPackage}`,
-          installPath: params.installPath,
-          clawhubUrl: params.clawhubUrl,
-          clawhubPackage: params.clawhubPackage,
-          clawhubFamily: params.clawhubFamily,
-          clawhubChannel: params.clawhubChannel,
-        },
-      },
-    },
-  };
-}
-
 function createBundledPathInstallConfig(params: {
   loadPaths: string[];
   installPath: string;
@@ -418,55 +393,6 @@ describe("updateNpmInstalledPlugins", () => {
       });
     },
   );
-
-  it("updates ClawHub-installed plugins via recorded package metadata", async () => {
-    installPluginFromClawHubMock.mockResolvedValue({
-      ok: true,
-      pluginId: "demo",
-      targetDir: "/tmp/demo",
-      version: "1.2.4",
-      clawhub: {
-        source: "clawhub",
-        clawhubUrl: "https://clawhub.ai",
-        clawhubPackage: "demo",
-        clawhubFamily: "code-plugin",
-        clawhubChannel: "official",
-        integrity: "sha256-next",
-        resolvedAt: "2026-03-22T00:00:00.000Z",
-      },
-    });
-
-    const result = await updateNpmInstalledPlugins({
-      config: createClawHubInstallConfig({
-        pluginId: "demo",
-        installPath: "/tmp/demo",
-        clawhubUrl: "https://clawhub.ai",
-        clawhubPackage: "demo",
-        clawhubFamily: "code-plugin",
-        clawhubChannel: "official",
-      }),
-      pluginIds: ["demo"],
-    });
-
-    expect(installPluginFromClawHubMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        spec: "clawhub:demo",
-        baseUrl: "https://clawhub.ai",
-        expectedPluginId: "demo",
-        mode: "update",
-      }),
-    );
-    expect(result.config.plugins?.installs?.demo).toMatchObject({
-      source: "clawhub",
-      spec: "clawhub:demo",
-      installPath: "/tmp/demo",
-      version: "1.2.4",
-      clawhubPackage: "demo",
-      clawhubFamily: "code-plugin",
-      clawhubChannel: "official",
-      integrity: "sha256-next",
-    });
-  });
 
   it("migrates legacy unscoped install keys when a scoped npm package updates", async () => {
     installPluginFromNpmSpecMock.mockResolvedValue({

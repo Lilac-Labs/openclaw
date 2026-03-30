@@ -925,7 +925,7 @@ Quick answers plus deeper troubleshooting for real-world setups (local dev, VPS,
   </Accordion>
 
   <Accordion title="Can I load skills from a custom folder?">
-    Yes. Add extra directories via `skills.load.extraDirs` in `~/.openclaw/openclaw.json` (lowest precedence). Default precedence remains: `<workspace>/skills` → `~/.openclaw/skills` → bundled → `skills.load.extraDirs`. `clawhub` installs into `./skills` by default, which OpenClaw treats as `<workspace>/skills` on the next session.
+    Yes. Add extra directories via `skills.load.extraDirs` in `~/.openclaw/openclaw.json` (lowest precedence). Default precedence remains: `<workspace>/skills` → `~/.openclaw/skills` → bundled → `skills.load.extraDirs`.
   </Accordion>
 
   <Accordion title="How can I use different models for different tasks?">
@@ -997,15 +997,12 @@ Quick answers plus deeper troubleshooting for real-world setups (local dev, VPS,
 
   <Accordion title="How do I install skills on Linux?">
     Use native `openclaw skills` commands or drop skills into your workspace. The macOS Skills UI isn't available on Linux.
-    Browse skills at [https://clawhub.com](https://clawhub.com).
 
     ```bash
     openclaw skills search "calendar"
     openclaw skills install <skill-slug>
     openclaw skills update --all
     ```
-
-    Install the separate `clawhub` CLI only if you want to publish or sync your own skills.
 
   </Accordion>
 
@@ -1081,7 +1078,7 @@ Quick answers plus deeper troubleshooting for real-world setups (local dev, VPS,
     openclaw skills update --all
     ```
 
-    Native installs land in the active workspace `skills/` directory. For shared skills across agents, place them in `~/.openclaw/skills/<name>/SKILL.md`. Some skills expect binaries installed via Homebrew; on Linux that means Linuxbrew (see the Homebrew Linux FAQ entry above). See [Skills](/tools/skills) and [ClawHub](/tools/clawhub).
+    Native installs land in the active workspace `skills/` directory. For shared skills across agents, place them in `~/.openclaw/skills/<name>/SKILL.md`. Some skills expect binaries installed via Homebrew; on Linux that means Linuxbrew (see the Homebrew Linux FAQ entry above). See [Skills](/tools/skills).
 
   </Accordion>
 

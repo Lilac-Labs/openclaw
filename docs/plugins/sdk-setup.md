@@ -305,18 +305,10 @@ const setupSurface = createOptionalChannelSetupSurface({
 
 ## Publishing and installing
 
-**External plugins:** publish to [ClawHub](/tools/clawhub) or npm, then install:
+**External plugins:** publish to npm, then install:
 
 ```bash
 openclaw plugins install @myorg/openclaw-my-plugin
-```
-
-OpenClaw tries ClawHub first and falls back to npm automatically. You can also
-force a specific source:
-
-```bash
-openclaw plugins install clawhub:@myorg/openclaw-my-plugin   # ClawHub only
-openclaw plugins install npm:@myorg/openclaw-my-plugin       # npm only
 ```
 
 **In-repo plugins:** place under `extensions/` and they are automatically

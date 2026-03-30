@@ -98,7 +98,6 @@ The YAML frontmatter supports these fields:
 - **Be concise** — instruct the model on _what_ to do, not how to be an AI
 - **Safety first** — if your skill uses `exec`, ensure prompts don't allow arbitrary command injection from untrusted input
 - **Test locally** — use `openclaw agent --message "..."` to test before sharing
-- **Use ClawHub** — browse and contribute skills at [ClawHub](https://clawhub.com)
 
 ## Where skills live
 
@@ -113,5 +112,4 @@ The YAML frontmatter supports these fields:
 
 - [Skills reference](/tools/skills) — loading, precedence, and gating rules
 - [Skills config](/tools/skills-config) — `skills.*` config schema
-- [ClawHub](/tools/clawhub) — public skill registry
 - [Building Plugins](/plugins/building-plugins) — plugins can ship skills

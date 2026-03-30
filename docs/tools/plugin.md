@@ -48,13 +48,13 @@ with OpenClaw), others are **external** (published on npm by the community).
 If you prefer chat-native control, enable `commands.plugins: true` and use:
 
 ```text
-/plugin install clawhub:@openclaw/voice-call
+/plugin install @openclaw/voice-call
 /plugin show voice-call
 /plugin enable voice-call
 ```
 
 The install path uses the same resolver as the CLI: local path/archive, explicit
-`clawhub:<pkg>`, or bare package spec (ClawHub first, then npm fallback).
+or bare package spec.
 
 ## Plugin types
 
@@ -207,8 +207,7 @@ openclaw plugins inspect <id> --json     # machine-readable
 openclaw plugins status                  # operational summary
 openclaw plugins doctor                  # diagnostics
 
-openclaw plugins install <package>        # install (ClawHub first, then npm)
-openclaw plugins install clawhub:<pkg>   # install from ClawHub only
+openclaw plugins install <package>        # install from npm
 openclaw plugins install <path>          # install from local path
 openclaw plugins install -l <path>       # link (no copy) for dev
 openclaw plugins update <id>             # update one plugin

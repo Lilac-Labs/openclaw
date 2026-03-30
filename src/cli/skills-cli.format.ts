@@ -19,11 +19,8 @@ export type SkillsCheckOptions = {
   json?: boolean;
 };
 
-function appendClawHubHint(output: string, json?: boolean): string {
-  if (json) {
-    return output;
-  }
-  return `${output}\n\nTip: use \`openclaw skills search\`, \`openclaw skills install\`, and \`openclaw skills update\` for ClawHub-backed skills.`;
+function appendClawHubHint(output: string, _json?: boolean): string {
+  return output;
 }
 
 function formatSkillStatus(skill: SkillStatusEntry): string {

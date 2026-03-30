@@ -60,7 +60,7 @@ export function registerSkillsCli(program: Command) {
 
   skills
     .command("search")
-    .description("Search ClawHub skills")
+    .description("Search skills")
     .argument("[query...]", "Optional search query")
     .option("--limit <n>", "Max results", (value) => Number.parseInt(value, 10))
     .option("--json", "Output as JSON", false)
@@ -75,7 +75,7 @@ export function registerSkillsCli(program: Command) {
           return;
         }
         if (results.length === 0) {
-          defaultRuntime.log("No ClawHub skills found.");
+          defaultRuntime.log("No skills found.");
           return;
         }
         for (const entry of results) {
@@ -91,8 +91,8 @@ export function registerSkillsCli(program: Command) {
 
   skills
     .command("install")
-    .description("Install a skill from ClawHub into the active workspace")
-    .argument("<slug>", "ClawHub skill slug")
+    .description("Install a skill into the active workspace")
+    .argument("<slug>", "Skill slug")
     .option("--version <version>", "Install a specific version")
     .option("--force", "Overwrite an existing workspace skill", false)
     .action(async (slug: string, opts: { version?: string; force?: boolean }) => {
@@ -121,9 +121,9 @@ export function registerSkillsCli(program: Command) {
 
   skills
     .command("update")
-    .description("Update ClawHub-installed skills in the active workspace")
+    .description("Update installed skills in the active workspace")
     .argument("[slug]", "Single skill slug")
-    .option("--all", "Update all tracked ClawHub skills", false)
+    .option("--all", "Update all tracked skills", false)
     .action(async (slug: string | undefined, opts: { all?: boolean }) => {
       try {
         if (!slug && !opts.all) {
@@ -139,7 +139,7 @@ export function registerSkillsCli(program: Command) {
         const workspaceDir = resolveActiveWorkspaceDir();
         const tracked = await readTrackedClawHubSkillSlugs(workspaceDir);
         if (opts.all && tracked.length === 0) {
-          defaultRuntime.log("No tracked ClawHub skills to update.");
+          defaultRuntime.log("No tracked skills to update.");
           return;
         }
         const results = await updateSkillsFromClawHub({
