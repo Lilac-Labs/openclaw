@@ -14,7 +14,7 @@ Welcome to the lobster tank! 🦞
 - **Peter Steinberger** - Benevolent Dictator
   - GitHub: [@steipete](https://github.com/steipete) · X: [@steipete](https://x.com/steipete)
 
-- **Shadow** - Discord subsystem, Discord admin, all community moderation
+- **Shadow** - Discord subsystem, Discord admin, Clawhub, all community moderation
   - GitHub: [@thewilloftheshadow](https://github.com/thewilloftheshadow) · X: [@4shadowed](https://x.com/4shadowed)
 
 - **Vignesh** - Memory (QMD), formal modeling, TUI, IRC, and Lobster
@@ -24,7 +24,7 @@ Welcome to the lobster tank! 🦞
   - GitHub: [@joshp123](https://github.com/joshp123) · X: [@jjpcodes](https://x.com/jjpcodes)
 
 - **Ayaan Zaidi** - Telegram subsystem, Android app
-  - GitHub: [@obviyus](https://github.com/obviyus) · X: [@0bviyus](https://x.com/0bviyus)
+  - GitHub: [@obviyus](https://github.com/obviyus) · X: [@obviyus](https://x.com/obviyus)
 
 - **Tyler Yust** - Agents/subagents, cron, BlueBubbles, macOS app
   - GitHub: [@tyler6204](https://github.com/tyler6204) · X: [@tyleryust](https://x.com/tyleryust)
@@ -58,6 +58,7 @@ Welcome to the lobster tank! 🦞
 
 - **Jonathan Taylor** - ACP subsystem, Gateway features/bugs, Gog/Mog/Sog CLI's, SEDMAT
   - GitHub [@visionik](https://github.com/visionik) · X: [@visionik](https://x.com/visionik)
+
 - **Josh Lehman** - Compaction, Tlon/Urbit subsystem
   - GitHub [@jalehman](https://github.com/jalehman) · X: [@jlehman\_](https://x.com/jlehman_)
 
@@ -76,9 +77,6 @@ Welcome to the lobster tank! 🦞
 - **Tengji (George) Zhang** - Chinese model APIs, cloud, pi
   - GitHub: [@odysseus0](https://github.com/odysseus0) · X: [@odysseus0z](https://x.com/odysseus0z)
 
-- **Andrew (Bubbles) Demczuk** - Agents/Gateway/TTS/VTT
-  - GitHub: [@ademczuk](https://github.com/ademczuk) · X: [@ademczuk](https://x.com/ademczuk)
-
 ## How to Contribute
 
 1. **Bugs & small fixes** → Open a PR!
@@ -96,6 +94,7 @@ Welcome to the lobster tank! 🦞
   - `pnpm test:extension --list` to see valid extension ids
   - If you changed shared plugin or channel surfaces, run `pnpm test:contracts`
   - For targeted shared-surface work, use `pnpm test:contracts:channels` or `pnpm test:contracts:plugins`
+  - These commands also cover the shared seam/smoke files that the default unit lane skips
   - If you changed broader runtime behavior, still run the relevant wider lanes (`pnpm test:extensions`, `pnpm test:channels`, or `pnpm test`) before asking for review
 - If you have access to Codex, run `codex review --base origin/main` locally before opening or updating your PR. Treat this as the current highest standard of AI review, even if GitHub Codex review also runs.
 - Do not submit refactor-only PRs unless a maintainer explicitly requested that refactor for an active fix or deliverable.
@@ -157,7 +156,7 @@ We are currently prioritizing:
 
 - **Stability**: Fixing edge cases in channel connections (WhatsApp/Telegram).
 - **UX**: Improving the onboarding wizard and error messages.
-- **Skills**: For skill contributions, publish community skills or add workspace skills locally.
+- **Skills**: For skill contributions, head to [ClawHub](https://clawhub.ai/) — the community hub for OpenClaw skills.
 - **Performance**: Optimizing token usage and compaction logic.
 
 Check the [GitHub Issues](https://github.com/openclaw/openclaw/issues) for "good first issue" labels!
@@ -190,6 +189,7 @@ We take security reports seriously. Report vulnerabilities directly to the repos
 - **macOS desktop app** — [openclaw/openclaw](https://github.com/openclaw/openclaw) (apps/macos)
 - **iOS app** — [openclaw/openclaw](https://github.com/openclaw/openclaw) (apps/ios)
 - **Android app** — [openclaw/openclaw](https://github.com/openclaw/openclaw) (apps/android)
+- **ClawHub** — [openclaw/clawhub](https://github.com/openclaw/clawhub)
 - **Trust and threat model** — [openclaw/trust](https://github.com/openclaw/trust)
 
 For issues that don't fit a specific repo, or if you're unsure, email **security@openclaw.ai** and we'll route it.

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createStorageMock } from "../test-helpers/storage.ts";
 import {
   applyResolvedTheme,
   applySettings,
@@ -66,28 +67,47 @@ type SettingsHost = {
   pendingGatewayToken?: string | null;
 };
 
-function createStorageMock(): Storage {
-  const store = new Map<string, string>();
-  return {
-    get length() {
-      return store.size;
+function setTestWindowUrl(urlString: string) {
+  const current = new URL(urlString);
+  const history = {
+    replaceState: vi.fn((_state: unknown, _title: string, nextUrl: string | URL) => {
+      const next = new URL(String(nextUrl), current.toString());
+      current.href = next.toString();
+      current.protocol = next.protocol;
+      current.host = next.host;
+      current.pathname = next.pathname;
+      current.search = next.search;
+      current.hash = next.hash;
+    }),
+  };
+  const locationLike = {
+    get href() {
+      return current.toString();
     },
-    clear() {
-      store.clear();
+    get protocol() {
+      return current.protocol;
     },
-    getItem(key: string) {
-      return store.get(key) ?? null;
+    get host() {
+      return current.host;
     },
-    key(index: number) {
-      return Array.from(store.keys())[index] ?? null;
+    get pathname() {
+      return current.pathname;
     },
-    removeItem(key: string) {
-      store.delete(key);
+    get search() {
+      return current.search;
     },
-    setItem(key: string, value: string) {
-      store.set(key, String(value));
+    get hash() {
+      return current.hash;
     },
   };
+  vi.stubGlobal("window", {
+    location: locationLike,
+    history,
+    setInterval,
+    clearInterval,
+  } as unknown as Window & typeof globalThis);
+  vi.stubGlobal("location", locationLike as Location);
+  return { history, location: locationLike };
 }
 
 function setTestWindowUrl(urlString: string) {

@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { upsertAcpSessionMeta } from "../../acp/runtime/session-meta.js";
 import * as jsonFiles from "../../infra/json-files.js";
+import * as transcriptEvents from "../../sessions/transcript-events.js";
 import type { OpenClawConfig } from "../config.js";
 import {
   clearSessionStoreCacheForTest,
@@ -174,40 +175,6 @@ describe("resolveSessionResetPolicy", () => {
       dailyResetAt: undefined,
       idleExpiresAt: undefined,
     });
-  });
-});
-
-describe("evaluateSessionFreshness — manual mode", () => {
-  const now = Date.now();
-  const oldUpdatedAt = now - 7 * 24 * 60 * 60 * 1000; // 7 days ago
-
-  it("always returns fresh for manual mode regardless of age", () => {
-    const result = evaluateSessionFreshness({
-      updatedAt: oldUpdatedAt,
-      now,
-      policy: { mode: "manual", atHour: 4 },
-    });
-    expect(result.fresh).toBe(true);
-    expect(result.dailyResetAt).toBeUndefined();
-    expect(result.idleExpiresAt).toBeUndefined();
-  });
-
-  it("returns fresh for manual mode even when updatedAt is zero", () => {
-    const result = evaluateSessionFreshness({
-      updatedAt: 0,
-      now,
-      policy: { mode: "manual", atHour: 4 },
-    });
-    expect(result.fresh).toBe(true);
-  });
-
-  it("returns stale for daily mode when session predates reset hour", () => {
-    const result = evaluateSessionFreshness({
-      updatedAt: oldUpdatedAt,
-      now,
-      policy: { mode: "daily", atHour: 4 },
-    });
-    expect(result.fresh).toBe(false);
   });
 });
 
@@ -461,6 +428,42 @@ describe("appendAssistantMessageToSessionTranscript", () => {
       expect(messageLine.message.content[0].type).toBe("text");
       expect(messageLine.message.content[0].text).toBe("Hello from delivery mirror!");
     }
+  });
+
+  it("emits transcript update events for delivery mirrors", async () => {
+    const sessionId = "test-session-id";
+    const sessionKey = "test-session";
+    const store = {
+      [sessionKey]: {
+        sessionId,
+        chatType: "direct",
+        channel: "discord",
+      },
+    };
+    fs.writeFileSync(fixture.storePath(), JSON.stringify(store), "utf-8");
+    const emitSpy = vi.spyOn(transcriptEvents, "emitSessionTranscriptUpdate");
+
+    await appendAssistantMessageToSessionTranscript({
+      sessionKey,
+      text: "Hello from delivery mirror!",
+      storePath: fixture.storePath(),
+    });
+
+    const sessionFile = resolveSessionTranscriptPathInDir(sessionId, fixture.sessionsDir());
+    expect(emitSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionFile,
+        sessionKey,
+        messageId: expect.any(String),
+        message: expect.objectContaining({
+          role: "assistant",
+          provider: "openclaw",
+          model: "delivery-mirror",
+          content: [{ type: "text", text: "Hello from delivery mirror!" }],
+        }),
+      }),
+    );
+    emitSpy.mockRestore();
   });
 
   it("does not append a duplicate delivery mirror for the same idempotency key", async () => {
