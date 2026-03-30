@@ -235,6 +235,7 @@ export async function getReplyFromConfig(
     isGroup,
     triggerBodyNormalized,
     bodyStripped,
+    resetAtHour,
   } = sessionState;
 
   if (resetTriggered && bodyStripped?.trim()) {
@@ -473,5 +474,6 @@ export async function getReplyFromConfig(
     storePath,
     workspaceDir,
     abortedLastRun,
+    resetAtHour,
   });
 }

@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import { lookupContextTokens } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
-import { resolveFreshSessionTotalTokens, type SessionEntry } from "../../config/sessions.js";
+import {
+  resolveDailyResetAtMs,
+  resolveFreshSessionTotalTokens,
+  type SessionEntry,
+} from "../../config/sessions.js";
 
 export function resolveMemoryFlushContextWindowTokens(params: {
   modelId?: string;
@@ -121,4 +125,20 @@ export function computeContextHash(messages: Array<{ role?: string; content?: un
   const payload = `${messages.length}:${tail.map((m, i) => `[${i}:${m.role ?? ""}]${typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "")}`).join("\x00")}`;
   const hash = crypto.createHash("sha256").update(payload).digest("hex");
   return hash.slice(0, 16);
+}
+
+/**
+ * Checks if a daily date boundary has been crossed since the last memory
+ * checkpoint. Uses the same atHour concept as daily session resets.
+ */
+export function shouldRunDailyMemoryCheckpoint(params: {
+  entry?: Pick<SessionEntry, "memoryCheckpointAt">;
+  nowMs: number;
+  atHour: number;
+}): boolean {
+  if (!params.entry) {
+    return false;
+  }
+  const boundary = resolveDailyResetAtMs(params.nowMs, params.atHour);
+  return (params.entry.memoryCheckpointAt ?? 0) < boundary;
 }

@@ -36,6 +36,7 @@ import {
 import {
   hasAlreadyFlushedForCurrentCompaction,
   resolveMemoryFlushContextWindowTokens,
+  shouldRunDailyMemoryCheckpoint,
   shouldRunMemoryFlush,
   shouldRunPreflightCompaction,
 } from "./memory-flush.js";
@@ -462,6 +463,7 @@ export async function runMemoryFlushIfNeeded(params: {
   sessionKey?: string;
   storePath?: string;
   isHeartbeat: boolean;
+  resetAtHour: number;
 }): Promise<SessionEntry | undefined> {
   const memoryFlushPlan = resolveMemoryFlushPlan({ cfg: params.cfg });
   if (!memoryFlushPlan) {
@@ -549,6 +551,13 @@ export async function runMemoryFlushIfNeeded(params: {
   const transcriptByteSize = sessionLogSnapshot?.byteSize;
   const shouldForceFlushByTranscriptSize =
     typeof transcriptByteSize === "number" && transcriptByteSize >= forceFlushTranscriptBytes;
+
+  const nowMs = Date.now();
+  const dailyCheckpointNeeded = shouldRunDailyMemoryCheckpoint({
+    entry: entry ?? undefined,
+    nowMs,
+    atHour: params.resetAtHour,
+  });
 
   const transcriptUsageSnapshot = sessionLogSnapshot?.usage;
   const transcriptPromptTokens = transcriptUsageSnapshot?.promptTokens;
@@ -639,7 +648,8 @@ export async function runMemoryFlushIfNeeded(params: {
       })) ||
     (shouldForceFlushByTranscriptSize &&
       entry != null &&
-      !hasAlreadyFlushedForCurrentCompaction(entry));
+      !hasAlreadyFlushedForCurrentCompaction(entry)) ||
+    (dailyCheckpointNeeded && memoryFlushWritable);
 
   if (!shouldFlushMemory) {
     return entry ?? params.sessionEntry;
@@ -698,7 +708,9 @@ export async function runMemoryFlushIfNeeded(params: {
           allowGatewaySubagentBinding: true,
           trigger: "memory",
           memoryFlushWritePath,
-          prompt: activeMemoryFlushPlan.prompt,
+          prompt: dailyCheckpointNeeded
+            ? `<openclaw:daily-checkpoint>${activeMemoryFlushPlan.prompt}</openclaw:daily-checkpoint>`
+            : `<openclaw:pre-compaction>${activeMemoryFlushPlan.prompt}</openclaw:pre-compaction>`,
           extraSystemPrompt: flushSystemPrompt,
           bootstrapPromptWarningSignaturesSeen,
           bootstrapPromptWarningSignature:
@@ -763,6 +775,7 @@ export async function runMemoryFlushIfNeeded(params: {
           update: async () => ({
             memoryFlushAt: Date.now(),
             memoryFlushCompactionCount,
+            ...(dailyCheckpointNeeded ? { memoryCheckpointAt: nowMs } : {}),
           }),
         });
         if (updatedEntry) {

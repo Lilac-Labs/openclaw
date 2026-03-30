@@ -73,6 +73,7 @@ export type SessionInitResult = {
   isGroup: boolean;
   bodyStripped?: string;
   triggerBodyNormalized: string;
+  resetAtHour: number;
 };
 
 function isResetAuthorizedForContext(params: {
@@ -588,6 +589,8 @@ export async function initSessionState(params: {
     sessionEntry.compactionCount = 0;
     sessionEntry.memoryFlushCompactionCount = undefined;
     sessionEntry.memoryFlushAt = undefined;
+    // Mark checkpoint as current so /new doesn't immediately trigger a daily flush
+    sessionEntry.memoryCheckpointAt = Date.now();
     // Clear stale context hash so the first flush in the new session is not
     // incorrectly skipped due to a hash match with the old transcript (#30115).
     sessionEntry.memoryFlushContextHash = undefined;
@@ -697,5 +700,6 @@ export async function initSessionState(params: {
     isGroup,
     bodyStripped,
     triggerBodyNormalized,
+    resetAtHour: resetPolicy.atHour,
   };
 }
