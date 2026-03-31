@@ -67,7 +67,7 @@ describe("skills cli commands", () => {
     readTrackedClawHubSkillSlugsMock.mockResolvedValue([]);
   });
 
-  it("searches ClawHub skills from the native CLI", async () => {
+  it("searches skills from the native CLI", async () => {
     searchSkillsFromClawHubMock.mockResolvedValue([
       {
         slug: "calendar",
@@ -86,7 +86,7 @@ describe("skills cli commands", () => {
     expect(runtimeLogs.some((line) => line.includes("calendar v1.2.3  Calendar"))).toBe(true);
   });
 
-  it("installs a skill from ClawHub into the active workspace", async () => {
+  it("installs a skill into the active workspace", async () => {
     installSkillFromClawHubMock.mockResolvedValue({
       ok: true,
       slug: "calendar",
@@ -110,7 +110,7 @@ describe("skills cli commands", () => {
     ).toBe(true);
   });
 
-  it("updates all tracked ClawHub skills", async () => {
+  it("updates all tracked skills", async () => {
     readTrackedClawHubSkillSlugsMock.mockResolvedValue(["calendar"]);
     updateSkillsFromClawHubMock.mockResolvedValue([
       {

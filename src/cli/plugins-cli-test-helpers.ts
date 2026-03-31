@@ -4,6 +4,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { createCliRuntimeCapture } from "./test-runtime-capture.js";
 
 export const loadConfig = vi.fn<() => OpenClawConfig>(() => ({}) as OpenClawConfig);
+export const readConfigFileSnapshot = vi.fn();
 export const writeConfigFile = vi.fn<(config: OpenClawConfig) => Promise<void>>(
   async () => undefined,
 );
@@ -22,8 +23,6 @@ export const updateNpmInstalledHookPacks = vi.fn();
 export const promptYesNo = vi.fn();
 export const installPluginFromNpmSpec = vi.fn();
 export const installPluginFromPath = vi.fn();
-export const installPluginFromClawHub = vi.fn();
-export const parseClawHubPluginSpec = vi.fn();
 export const installHooksFromNpmSpec = vi.fn();
 export const installHooksFromPath = vi.fn();
 export const recordHookInstall = vi.fn();
@@ -39,6 +38,7 @@ vi.mock("../runtime.js", () => ({
 
 vi.mock("../config/config.js", () => ({
   loadConfig: () => loadConfig(),
+  readConfigFileSnapshot: (...args: unknown[]) => readConfigFileSnapshot(...args),
   writeConfigFile: (config: OpenClawConfig) => writeConfigFile(config),
 }));
 
@@ -112,20 +112,6 @@ vi.mock("../hooks/installs.js", () => ({
   recordHookInstall: (...args: unknown[]) => recordHookInstall(...args),
 }));
 
-vi.mock("../plugins/clawhub.js", () => ({
-  CLAWHUB_INSTALL_ERROR_CODE: {
-    PACKAGE_NOT_FOUND: "package_not_found",
-    VERSION_NOT_FOUND: "version_not_found",
-  },
-  installPluginFromClawHub: (...args: unknown[]) => installPluginFromClawHub(...args),
-  formatClawHubSpecifier: ({ name, version }: { name: string; version?: string }) =>
-    `clawhub:${name}${version ? `@${version}` : ""}`,
-}));
-
-vi.mock("../infra/clawhub.js", () => ({
-  parseClawHubPluginSpec: (...args: unknown[]) => parseClawHubPluginSpec(...args),
-}));
-
 const { registerPluginsCli } = await import("./plugins-cli.js");
 
 export function runPluginsCommand(argv: string[]) {
@@ -138,6 +124,7 @@ export function runPluginsCommand(argv: string[]) {
 export function resetPluginsCliTestState() {
   resetRuntimeCapture();
   loadConfig.mockReset();
+  readConfigFileSnapshot.mockReset();
   writeConfigFile.mockReset();
   resolveStateDir.mockReset();
   installPluginFromMarketplace.mockReset();
@@ -154,13 +141,24 @@ export function resetPluginsCliTestState() {
   promptYesNo.mockReset();
   installPluginFromNpmSpec.mockReset();
   installPluginFromPath.mockReset();
-  installPluginFromClawHub.mockReset();
-  parseClawHubPluginSpec.mockReset();
   installHooksFromNpmSpec.mockReset();
   installHooksFromPath.mockReset();
   recordHookInstall.mockReset();
 
   loadConfig.mockReturnValue({} as OpenClawConfig);
+  readConfigFileSnapshot.mockResolvedValue({
+    path: "/tmp/openclaw-config.json5",
+    exists: true,
+    raw: "{}",
+    parsed: {},
+    resolved: {},
+    valid: true,
+    config: {} as OpenClawConfig,
+    hash: "mock",
+    issues: [],
+    warnings: [],
+    legacyIssues: [],
+  });
   writeConfigFile.mockResolvedValue(undefined);
   resolveStateDir.mockReturnValue("/tmp/openclaw-state");
   resolveMarketplaceInstallShortcut.mockResolvedValue(null);
@@ -207,11 +205,6 @@ export function resetPluginsCliTestState() {
     ok: false,
     error: "npm install disabled in test",
   });
-  installPluginFromClawHub.mockResolvedValue({
-    ok: false,
-    error: "clawhub install disabled in test",
-  });
-  parseClawHubPluginSpec.mockReturnValue(null);
   installHooksFromPath.mockResolvedValue({
     ok: false,
     error: "hook path install disabled in test",

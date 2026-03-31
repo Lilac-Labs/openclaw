@@ -491,6 +491,8 @@ openclaw status --deep
 - `--json`：输出 JSON（无样式）。
 - `-v`, `--verbose`：包含缺失要求的详细信息。
 
+提示：使用 `openclaw skills search`、`openclaw skills install` 和 `openclaw skills update` 来管理 Skills。
+
 ### `pairing`
 
 批准跨渠道的私信配对请求。
