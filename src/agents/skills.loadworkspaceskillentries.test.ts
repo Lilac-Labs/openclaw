@@ -131,6 +131,30 @@ describe("loadWorkspaceSkillEntries", () => {
   });
 
   it.runIf(process.platform !== "win32")(
+    "loads managed skills whose symlinks resolve outside the managed root",
+    async () => {
+      const workspaceDir = await createTempWorkspaceDir();
+      const managedDir = path.join(workspaceDir, ".managed");
+      await fs.mkdir(managedDir, { recursive: true });
+      const outsideDir = await createTempWorkspaceDir();
+      const externalSkillDir = path.join(outsideDir, "ext-skill");
+      await writeSkill({
+        dir: externalSkillDir,
+        name: "ext-skill",
+        description: "External symlinked skill",
+      });
+      await fs.symlink(externalSkillDir, path.join(managedDir, "ext-skill"), "dir");
+
+      const entries = loadWorkspaceSkillEntries(workspaceDir, {
+        managedSkillsDir: managedDir,
+        bundledSkillsDir: path.join(workspaceDir, ".bundled"),
+      });
+
+      expect(entries.map((entry) => entry.skill.name)).toContain("ext-skill");
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
     "skips workspace skill directories that resolve outside the workspace root",
     async () => {
       const workspaceDir = await createTempWorkspaceDir();

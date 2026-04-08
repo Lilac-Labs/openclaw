@@ -204,12 +204,16 @@ function resolveContainedSkillPath(params: {
   rootDir: string;
   rootRealPath: string;
   candidatePath: string;
+  allowExternalSymlinks?: boolean;
 }): string | null {
   const candidateRealPath = tryRealpath(params.candidatePath);
   if (!candidateRealPath) {
     return null;
   }
   if (isPathInside(params.rootRealPath, candidateRealPath)) {
+    return candidateRealPath;
+  }
+  if (params.allowExternalSymlinks) {
     return candidateRealPath;
   }
   warnEscapedSkillPath({
@@ -226,6 +230,7 @@ function filterLoadedSkillsInsideRoot(params: {
   source: string;
   rootDir: string;
   rootRealPath: string;
+  allowExternalSymlinks?: boolean;
 }): Skill[] {
   return params.skills.filter((skill) => {
     const baseDirRealPath = resolveContainedSkillPath({
@@ -233,6 +238,7 @@ function filterLoadedSkillsInsideRoot(params: {
       rootDir: params.rootDir,
       rootRealPath: params.rootRealPath,
       candidatePath: skill.baseDir,
+      allowExternalSymlinks: params.allowExternalSymlinks,
     });
     if (!baseDirRealPath) {
       return false;
@@ -242,6 +248,7 @@ function filterLoadedSkillsInsideRoot(params: {
       rootDir: params.rootDir,
       rootRealPath: params.rootRealPath,
       candidatePath: skill.filePath,
+      allowExternalSymlinks: params.allowExternalSymlinks,
     });
     return Boolean(skillFileRealPath);
   });
@@ -300,7 +307,11 @@ function loadSkillEntries(
 ): SkillEntry[] {
   const limits = resolveSkillsLimits(opts?.config);
 
-  const loadSkills = (params: { dir: string; source: string }): Skill[] => {
+  const loadSkills = (params: {
+    dir: string;
+    source: string;
+    allowExternalSymlinks?: boolean;
+  }): Skill[] => {
     const rootDir = path.resolve(params.dir);
     const rootRealPath = tryRealpath(rootDir) ?? rootDir;
     const resolved = resolveNestedSkillsRoot(params.dir, {
@@ -312,6 +323,7 @@ function loadSkillEntries(
       rootDir,
       rootRealPath,
       candidatePath: baseDir,
+      allowExternalSymlinks: params.allowExternalSymlinks,
     });
     if (!baseDirRealPath) {
       return [];
@@ -325,6 +337,7 @@ function loadSkillEntries(
         rootDir,
         rootRealPath: baseDirRealPath,
         candidatePath: rootSkillMd,
+        allowExternalSymlinks: params.allowExternalSymlinks,
       });
       if (!rootSkillRealPath) {
         return [];
@@ -350,6 +363,7 @@ function loadSkillEntries(
         source: params.source,
         rootDir,
         rootRealPath: baseDirRealPath,
+        allowExternalSymlinks: params.allowExternalSymlinks,
       });
     }
 
@@ -386,6 +400,7 @@ function loadSkillEntries(
         rootDir,
         rootRealPath: baseDirRealPath,
         candidatePath: skillDir,
+        allowExternalSymlinks: params.allowExternalSymlinks,
       });
       if (!skillDirRealPath) {
         continue;
@@ -399,6 +414,7 @@ function loadSkillEntries(
         rootDir,
         rootRealPath: baseDirRealPath,
         candidatePath: skillMd,
+        allowExternalSymlinks: params.allowExternalSymlinks,
       });
       if (!skillMdRealPath) {
         continue;
@@ -425,6 +441,7 @@ function loadSkillEntries(
           source: params.source,
           rootDir,
           rootRealPath: baseDirRealPath,
+          allowExternalSymlinks: params.allowExternalSymlinks,
         }),
       );
 
@@ -472,6 +489,7 @@ function loadSkillEntries(
   const managedSkills = loadSkills({
     dir: managedSkillsDir,
     source: "openclaw-managed",
+    allowExternalSymlinks: true,
   });
   const personalAgentsSkillsDir = path.resolve(os.homedir(), ".agents", "skills");
   const personalAgentsSkills = loadSkills({
