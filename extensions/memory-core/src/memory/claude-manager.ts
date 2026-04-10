@@ -18,14 +18,17 @@ const log = createSubsystemLogger("memory:claude");
 const SEARCH_PROMPT_TEMPLATE = (query: string) =>
   `Search through the session files and memory files for: ${query}
 
-I want file paths and extracted key information from the files.
+I want file paths, exact timestamps from the data, and relevant excerpts (quote actual message content, not summaries).
+
+For .jsonl session files: extract the actual "text" field from message entries. Include the timestamp from the JSONL entry.
+For .md memory files: quote the relevant section directly.
 
 Output each match in this format, separated by ---:
 
 [2026-04-07 19:34] sessions/65d81ff6.jsonl
 
-The user asked about setting up a proxy server on port 18800.
-They wanted to bridge mobile connections through a Cloudflare tunnel.
+User (2026-04-07T19:30:12Z): "Can you help me set up a proxy server on port 18800?"
+Assistant (2026-04-07T19:30:45Z): "I'll set up a proxy server on port 18800 that bridges mobile connections through a Cloudflare tunnel..."
 
 ---
 
@@ -34,6 +37,11 @@ They wanted to bridge mobile connections through a Cloudflare tunnel.
 ## Proxy architecture
 - Port 18800 for REST + WS
 - Cloudflare tunnel auto-starts on launch
+
+---
+
+After the last result, add this line:
+> To read full file contents, use memory_get with the file path above.
 
 ---`;
 
@@ -141,8 +149,13 @@ export class ClaudeMemoryManager implements MemorySearchManager {
   // ── Private helpers ──────────────────────────────────────────
 
   private async runClaude(args: string[]): Promise<{ text: string; sessionId: string | null }> {
+    // Resolve claude binary path: same bin/ dir as the running node process
+    // (e.g. runtimes/node/bin/node → runtimes/node/bin/claude)
+    const claudeBin = path.join(path.dirname(process.execPath), "claude");
+    log.info(`spawning claude at: ${claudeBin}`);
+
     return new Promise((resolve, reject) => {
-      const child = spawn("claude", args, {
+      const child = spawn(claudeBin, args, {
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env },
       });
@@ -231,30 +244,14 @@ export class ClaudeMemoryManager implements MemorySearchManager {
       const block = blocks[i].trim();
       if (!block) continue;
 
-      const lines = block.split("\n");
-      // First line should be like: [2026-04-07 19:34] sessions/65d81ff6.jsonl
-      const headerMatch = lines[0]?.match(/^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\]\s+(.+)$/);
-
-      let filePath: string;
-      let snippet: string;
-
-      if (headerMatch) {
-        filePath = headerMatch[2].trim();
-        snippet = lines.slice(1).join("\n").trim();
-      } else {
-        // No header match — treat entire block as snippet, use index as path
-        filePath = `match-${i + 1}`;
-        snippet = block;
-      }
-
-      const source: MemorySource = filePath.includes("sessions") ? "sessions" : "memory";
+      const source: MemorySource = block.includes("sessions") ? "sessions" : "memory";
 
       results.push({
-        path: filePath,
-        startLine: 1,
-        endLine: 1,
-        score: 1.0 - i * 0.01, // rank-based synthetic score
-        snippet,
+        path: "",
+        startLine: 0,
+        endLine: 0,
+        score: 1,
+        snippet: block,
         source,
       });
     }
