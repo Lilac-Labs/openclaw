@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { readFile as fsReadFile, stat } from "node:fs/promises";
+import { readFile as fsReadFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { copyFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { createSubsystemLogger } from "openclaw/plugin-sdk/memory-core-host-engine-foundation";
 import {
@@ -57,6 +58,7 @@ export class ClaudeMemoryManager implements MemorySearchManager {
     _opts?: { maxResults?: number; minScore?: number; sessionKey?: string },
   ): Promise<MemorySearchResult[]> {
     const prompt = SEARCH_PROMPT_TEMPLATE(query);
+    const settingsPath = await this.ensureSearchSettings();
 
     const args = [
       "-p",
@@ -67,6 +69,8 @@ export class ClaudeMemoryManager implements MemorySearchManager {
       this.config.sessionsDir,
       "--add-dir",
       this.config.workspaceDir,
+      "--settings",
+      settingsPath,
     ];
 
     try {
@@ -147,6 +151,17 @@ export class ClaudeMemoryManager implements MemorySearchManager {
   }
 
   // ── Private helpers ──────────────────────────────────────────
+
+  private async ensureSearchSettings(): Promise<string> {
+    const home = process.env.HOME ?? "/tmp";
+    const settingsPath = path.join(home, ".openclaw", "claude-search-settings.json");
+    if (!existsSync(settingsPath)) {
+      await mkdir(path.dirname(settingsPath), { recursive: true });
+      const settings = { hooks: {}, enabledPlugins: {}, skipDangerousModePermissionPrompt: true };
+      await writeFile(settingsPath, JSON.stringify(settings, null, 2));
+    }
+    return settingsPath;
+  }
 
   private async runClaude(args: string[]): Promise<{ text: string; sessionId: string | null }> {
     // Resolve claude binary path: same bin/ dir as the running node process
