@@ -18,6 +18,7 @@ export {
 export { readMemoryFile } from "./host/read-file.js";
 export { resolveMemoryBackendConfig } from "./host/backend-config.js";
 export type {
+  ResolvedClaudeConfig,
   ResolvedMemoryBackendConfig,
   ResolvedQmdConfig,
   ResolvedQmdMcporterConfig,
