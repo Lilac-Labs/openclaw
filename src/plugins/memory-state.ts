@@ -39,8 +39,9 @@ export type RegisteredMemorySearchManager = {
 };
 
 export type MemoryRuntimeBackendConfig = {
-  backend: "builtin" | "qmd";
+  backend: "builtin" | "qmd" | "claude";
   qmd?: object;
+  claude?: object;
 };
 
 export type MemoryPluginRuntime = {

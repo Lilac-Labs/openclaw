@@ -51,7 +51,7 @@ export async function noteMemorySearchHealth(
     note("No active memory plugin is registered for the current config.", "Memory search");
     return;
   }
-  if (backendConfig.backend === "qmd") {
+  if (backendConfig.backend === "qmd" || backendConfig.backend === "claude") {
     return;
   }
 

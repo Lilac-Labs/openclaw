@@ -2,6 +2,7 @@ import path from "node:path";
 import { resolveAgentWorkspaceDir } from "../../../../src/agents/agent-scope.js";
 import { parseDurationMs } from "../../../../src/cli/parse-duration.js";
 import type { OpenClawConfig } from "../../../../src/config/config.js";
+import { resolveStateDir } from "../../../../src/config/paths.js";
 import type { SessionSendPolicyConfig } from "../../../../src/config/types.base.js";
 import type {
   MemoryBackend,
@@ -14,10 +15,17 @@ import type {
 import { resolveUserPath } from "../../../../src/utils.js";
 import { splitShellArgs } from "../../../../src/utils/shell-argv.js";
 
+export type ResolvedClaudeConfig = {
+  agentId: string;
+  sessionsDir: string;
+  workspaceDir: string;
+};
+
 export type ResolvedMemoryBackendConfig = {
   backend: MemoryBackend;
   citations: MemoryCitationsMode;
   qmd?: ResolvedQmdConfig;
+  claude?: ResolvedClaudeConfig;
 };
 
 export type ResolvedQmdCollection = {
@@ -300,6 +308,20 @@ export function resolveMemoryBackendConfig(params: {
 }): ResolvedMemoryBackendConfig {
   const backend = params.cfg.memory?.backend ?? DEFAULT_BACKEND;
   const citations = params.cfg.memory?.citations ?? DEFAULT_CITATIONS;
+  if (backend === "claude") {
+    const workspaceDir = resolveAgentWorkspaceDir(params.cfg, params.agentId);
+    const stateDir = resolveStateDir();
+    return {
+      backend: "claude",
+      citations,
+      claude: {
+        agentId: params.agentId,
+        sessionsDir: path.join(stateDir, "agents", params.agentId, "sessions"),
+        workspaceDir,
+      },
+    };
+  }
+
   if (backend !== "qmd") {
     return { backend: "builtin", citations };
   }

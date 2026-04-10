@@ -96,6 +96,48 @@ export async function getMemorySearchManager(params: {
     }
   }
 
+  if (resolved.backend === "claude" && resolved.claude) {
+    try {
+      const { ClaudeMemoryManager } = await import("./claude-manager.js");
+      const primary = new ClaudeMemoryManager(resolved.claude);
+      const wrapper = new FallbackMemoryManager({
+        primary,
+        fallbackFactory: async () => {
+          // claude → qmd → builtin fallback chain
+          try {
+            // Force QMD resolution by overriding backend in config
+            const qmdCfg = {
+              ...params.cfg,
+              memory: { ...params.cfg.memory, backend: "qmd" as const },
+            };
+            const qmdResolved = resolveMemoryBackendConfig({
+              cfg: qmdCfg,
+              agentId: params.agentId,
+            });
+            if (qmdResolved.backend === "qmd" && qmdResolved.qmd) {
+              const { QmdMemoryManager } = await import("./qmd-manager.js");
+              const qmd = await QmdMemoryManager.create({
+                cfg: qmdCfg,
+                agentId: params.agentId,
+                resolved: qmdResolved,
+                mode: "full",
+              });
+              if (qmd) return qmd;
+            }
+          } catch {
+            // QMD not available, fall through to builtin
+          }
+          const { MemoryIndexManager } = await loadManagerRuntime();
+          return await MemoryIndexManager.get(params);
+        },
+      });
+      return { manager: wrapper };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`claude memory unavailable; falling back: ${message}`);
+    }
+  }
+
   try {
     const { MemoryIndexManager } = await loadManagerRuntime();
     const manager = await MemoryIndexManager.get(params);
