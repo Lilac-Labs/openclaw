@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile as fsReadFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { copyFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { createSubsystemLogger } from "openclaw/plugin-sdk/memory-core-host-engine-foundation";
 import {
@@ -63,6 +63,8 @@ export class ClaudeMemoryManager implements MemorySearchManager {
     const args = [
       "-p",
       prompt,
+      "--model",
+      "sonnet",
       "--output-format",
       "stream-json",
       "--add-dir",
