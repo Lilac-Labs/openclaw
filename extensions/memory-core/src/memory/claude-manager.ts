@@ -64,7 +64,7 @@ export class ClaudeMemoryManager implements MemorySearchManager {
       "-p",
       prompt,
       "--model",
-      "sonnet",
+      this.config.model,
       "--output-format",
       "stream-json",
       "--add-dir",

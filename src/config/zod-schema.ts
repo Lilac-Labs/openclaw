@@ -111,11 +111,18 @@ const MemoryQmdSchema = z
   })
   .strict();
 
+const MemoryClaudeSchema = z
+  .object({
+    model: z.union([z.literal("haiku"), z.literal("sonnet"), z.literal("opus")]).optional(),
+  })
+  .strict();
+
 const MemorySchema = z
   .object({
     backend: z.union([z.literal("builtin"), z.literal("qmd"), z.literal("claude")]).optional(),
     citations: z.union([z.literal("auto"), z.literal("on"), z.literal("off")]).optional(),
     qmd: MemoryQmdSchema.optional(),
+    claude: MemoryClaudeSchema.optional(),
   })
   .strict()
   .optional();

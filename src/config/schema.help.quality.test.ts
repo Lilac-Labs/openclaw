@@ -401,6 +401,7 @@ const TARGET_KEYS = [
 const ENUM_EXPECTATIONS: Record<string, string[]> = {
   "memory.citations": ['"auto"', '"on"', '"off"'],
   "memory.backend": ['"builtin"', '"qmd"', '"claude"'],
+  "memory.claude.model": ['"haiku"', '"sonnet"', '"opus"'],
   "memory.qmd.searchMode": ['"query"', '"search"', '"vsearch"'],
   "models.mode": ['"merge"', '"replace"'],
   "models.providers.*.auth": ['"api-key"', '"token"', '"oauth"', '"aws-sdk"'],

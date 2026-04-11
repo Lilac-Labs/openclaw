@@ -8630,6 +8630,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                     type: "string",
                     const: "idle",
                   },
+                  {
+                    type: "string",
+                    const: "manual",
+                  },
                 ],
               },
               atHour: {
@@ -8661,6 +8665,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                         type: "string",
                         const: "idle",
                       },
+                      {
+                        type: "string",
+                        const: "manual",
+                      },
                     ],
                   },
                   atHour: {
@@ -8688,6 +8696,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                       {
                         type: "string",
                         const: "idle",
+                      },
+                      {
+                        type: "string",
+                        const: "manual",
                       },
                     ],
                   },
@@ -8717,6 +8729,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                         type: "string",
                         const: "idle",
                       },
+                      {
+                        type: "string",
+                        const: "manual",
+                      },
                     ],
                   },
                   atHour: {
@@ -8744,6 +8760,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                       {
                         type: "string",
                         const: "idle",
+                      },
+                      {
+                        type: "string",
+                        const: "manual",
                       },
                     ],
                   },
@@ -8780,6 +8800,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                     {
                       type: "string",
                       const: "idle",
+                    },
+                    {
+                      type: "string",
+                      const: "manual",
                     },
                   ],
                 },
@@ -10819,6 +10843,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 type: "string",
                 const: "qmd",
               },
+              {
+                type: "string",
+                const: "claude",
+              },
             ],
           },
           citations: {
@@ -11051,6 +11079,28 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                   },
                 },
                 additionalProperties: false,
+              },
+            },
+            additionalProperties: false,
+          },
+          claude: {
+            type: "object",
+            properties: {
+              model: {
+                anyOf: [
+                  {
+                    type: "string",
+                    const: "haiku",
+                  },
+                  {
+                    type: "string",
+                    const: "sonnet",
+                  },
+                  {
+                    type: "string",
+                    const: "opus",
+                  },
+                ],
               },
             },
             additionalProperties: false,
@@ -13552,7 +13602,7 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     },
     "memory.backend": {
       label: "Memory Backend",
-      help: 'Selects the global memory engine: "builtin" uses OpenClaw memory internals, while "qmd" uses the QMD sidecar pipeline. Keep "builtin" unless you intentionally operate QMD.',
+      help: 'Selects the global memory engine: "builtin" uses OpenClaw memory internals, "qmd" uses the QMD sidecar pipeline, and "claude" uses the Claude CLI for LLM-powered search. Keep "builtin" unless you intentionally operate QMD or have Claude CLI installed.',
       tags: ["storage"],
     },
     "memory.citations": {
@@ -14334,7 +14384,7 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     },
     "session.reset.mode": {
       label: "Session Reset Mode",
-      help: 'Selects reset strategy: "daily" resets at a configured hour and "idle" resets after inactivity windows. Keep one clear mode per policy to avoid surprising context turnover patterns.',
+      help: 'Selects reset strategy: "daily" resets at a configured hour, "idle" resets after inactivity windows, and "manual" never auto-resets (only explicit /new or /reset). Keep one clear mode per policy to avoid surprising context turnover patterns.',
       tags: ["storage"],
     },
     "session.reset.atHour": {
@@ -15444,6 +15494,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       label: "Plugin Marketplace Plugin",
       help: "Plugin entry name inside the source marketplace, used for later updates.",
       tags: ["advanced"],
+    },
+    "memory.claude.model": {
+      help: 'Selects the Claude model used for memory search: "haiku" is fastest and cheapest, "sonnet" balances speed and quality (default), and "opus" is most capable but slowest. Change to compare search quality across models.',
+      tags: ["storage", "models"],
     },
     "models.providers.*.headers.*": {
       sensitive: true,

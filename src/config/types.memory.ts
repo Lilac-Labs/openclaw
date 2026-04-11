@@ -4,10 +4,17 @@ export type MemoryBackend = "builtin" | "qmd" | "claude";
 export type MemoryCitationsMode = "auto" | "on" | "off";
 export type MemoryQmdSearchMode = "query" | "search" | "vsearch";
 
+export type MemoryClaudeModel = "haiku" | "sonnet" | "opus";
+
+export type MemoryClaudeConfig = {
+  model?: MemoryClaudeModel;
+};
+
 export type MemoryConfig = {
   backend?: MemoryBackend;
   citations?: MemoryCitationsMode;
   qmd?: MemoryQmdConfig;
+  claude?: MemoryClaudeConfig;
 };
 
 export type MemoryQmdConfig = {

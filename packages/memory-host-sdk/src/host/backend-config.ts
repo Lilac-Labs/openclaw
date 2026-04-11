@@ -19,6 +19,7 @@ export type ResolvedClaudeConfig = {
   agentId: string;
   sessionsDir: string;
   workspaceDir: string;
+  model: string;
 };
 
 export type ResolvedMemoryBackendConfig = {
@@ -318,6 +319,7 @@ export function resolveMemoryBackendConfig(params: {
         agentId: params.agentId,
         sessionsDir: path.join(stateDir, "agents", params.agentId, "sessions"),
         workspaceDir,
+        model: params.cfg.memory?.claude?.model ?? "sonnet",
       },
     };
   }

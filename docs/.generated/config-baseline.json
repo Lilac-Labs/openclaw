@@ -42760,7 +42760,7 @@
         "storage"
       ],
       "label": "Memory Backend",
-      "help": "Selects the global memory engine: \"builtin\" uses OpenClaw memory internals, while \"qmd\" uses the QMD sidecar pipeline. Keep \"builtin\" unless you intentionally operate QMD.",
+      "help": "Selects the global memory engine: \"builtin\" uses OpenClaw memory internals, \"qmd\" uses the QMD sidecar pipeline, and \"claude\" uses the Claude CLI for LLM-powered search. Keep \"builtin\" unless you intentionally operate QMD or have Claude CLI installed.",
       "hasChildren": false
     },
     {
@@ -42775,6 +42775,26 @@
       ],
       "label": "Memory Citations Mode",
       "help": "Controls citation visibility in replies: \"auto\" shows citations when useful, \"on\" always shows them, and \"off\" hides them. Keep \"auto\" for a balanced signal-to-noise default.",
+      "hasChildren": false
+    },
+    {
+      "path": "memory.claude",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "memory.claude.model",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
       "hasChildren": false
     },
     {
@@ -58998,7 +59018,7 @@
         "storage"
       ],
       "label": "Session Reset Mode",
-      "help": "Selects reset strategy: \"daily\" resets at a configured hour and \"idle\" resets after inactivity windows. Keep one clear mode per policy to avoid surprising context turnover patterns.",
+      "help": "Selects reset strategy: \"daily\" resets at a configured hour, \"idle\" resets after inactivity windows, and \"manual\" never auto-resets (only explicit /new or /reset). Keep one clear mode per policy to avoid surprising context turnover patterns.",
       "hasChildren": false
     },
     {

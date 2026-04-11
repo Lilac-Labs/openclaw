@@ -879,6 +879,8 @@ export const FIELD_HELP: Record<string, string> = {
     'Selects the global memory engine: "builtin" uses OpenClaw memory internals, "qmd" uses the QMD sidecar pipeline, and "claude" uses the Claude CLI for LLM-powered search. Keep "builtin" unless you intentionally operate QMD or have Claude CLI installed.',
   "memory.citations":
     'Controls citation visibility in replies: "auto" shows citations when useful, "on" always shows them, and "off" hides them. Keep "auto" for a balanced signal-to-noise default.',
+  "memory.claude.model":
+    'Selects the Claude model used for memory search: "haiku" is fastest and cheapest, "sonnet" balances speed and quality (default), and "opus" is most capable but slowest. Change to compare search quality across models.',
   "memory.qmd.command":
     "Sets the executable path for the `qmd` binary used by the QMD backend (default: resolved from PATH). Use an explicit absolute path when multiple qmd installs exist or PATH differs across environments.",
   "memory.qmd.mcporter":
