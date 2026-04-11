@@ -12,12 +12,12 @@ export const buildPromptSection: MemoryPromptSectionBuilder = ({
   }
 
   let toolGuidance: string;
+  const queryTip =
+    "Write the query as a full natural-language question or phrase — copy the user's wording when possible (e.g. 'Who is Shelden?' not just 'Shelden'). Richer queries produce better recall.";
   if (hasMemorySearch && hasMemoryGet) {
-    toolGuidance =
-      "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md; then use memory_get to pull only the needed lines. If low confidence after search, say you checked.";
+    toolGuidance = `Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md; then use memory_get to pull only the needed lines. ${queryTip} If low confidence after search, say you checked.`;
   } else if (hasMemorySearch) {
-    toolGuidance =
-      "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md and answer from the matching results. If low confidence after search, say you checked.";
+    toolGuidance = `Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md and answer from the matching results. ${queryTip} If low confidence after search, say you checked.`;
   } else {
     toolGuidance =
       "Before answering anything about prior work, decisions, dates, people, preferences, or todos that already point to a specific memory file or note: run memory_get to pull only the needed lines. If low confidence after reading them, say you checked.";

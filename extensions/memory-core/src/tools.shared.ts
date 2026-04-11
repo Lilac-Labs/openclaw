@@ -19,7 +19,10 @@ export async function loadMemoryToolRuntime(): Promise<MemoryToolRuntime> {
 }
 
 export const MemorySearchSchema = Type.Object({
-  query: Type.String(),
+  query: Type.String({
+    description:
+      "Full natural-language question or phrase describing what you want to recall (e.g. 'Who is Shelden?' or 'What proxy port did we configure last week?'). Write the complete question — do not reduce to bare keywords.",
+  }),
   maxResults: Type.Optional(Type.Number()),
   minScore: Type.Optional(Type.Number()),
 });
