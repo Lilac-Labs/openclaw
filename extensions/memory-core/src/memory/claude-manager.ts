@@ -73,6 +73,9 @@ export class ClaudeMemoryManager implements MemorySearchManager {
       this.config.workspaceDir,
       "--settings",
       settingsPath,
+      "--permission-mode",
+      "bypassPermissions",
+      "--dangerously-skip-permissions",
     ];
 
     try {
